@@ -458,3 +458,32 @@ coverage value would make the containment test silently accept cells *outside*
 the window — which would look like random cells appearing at extreme zoom rather
 than like an arithmetic fault. `Viewport.MaxZoomFor` computes the limit from the
 width's bit length and the constructor refuses to exceed it.
+
+
+### Terminology — a misused term, found by being asked
+
+*Asked:* what a bolt is, and why that name.
+
+*What was wrong:* the definition was right — a bolt is AI-DLC's replacement for
+a sprint, a cycle measured in hours or days — but its **scope** was not. Bolts
+belong to the Construction phase. Inception, Construction and Operations are the
+three phases; bolts are the execution mechanism inside Construction. Labelling
+the inception work "Bolt 0" applied a Construction-phase term to a phase.
+
+*Why it survived this long:* the term was introduced in the very first plan
+document and never defined. Nothing downstream had reason to question it, and an
+undefined term cannot be checked — it just propagates. Every artifact since has
+used the numbering without anyone, including me, going back to the source.
+
+*Shipped:* the bolts README now defines the term, cites what AWS does and does
+not say about it, and records the inaccuracy plainly. The numbering is kept,
+because the commits, the units-of-work table and this log all reference it, and
+renumbering for pedantic correctness would break more than it fixes.
+
+*The pattern this belongs to:* the definition came from recall and happened to
+be right; the scope came from recall and was not. That is the same failure shape
+as entries 2 and 3, where `#O` and then the whole `#CXRLE` question were
+answered from memory rather than from the source. **The standing rule — where a
+published source exists, check it — applies to vocabulary, not only to formats
+and figures.** A term introduced without a citation is an unchecked claim that
+then spreads through every artifact that uses it.

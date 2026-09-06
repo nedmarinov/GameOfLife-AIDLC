@@ -1,5 +1,36 @@
 # Bolts
 
+## What a bolt is
+
+AI-DLC's replacement for a sprint: a work cycle measured in **hours or days**
+rather than weeks. It is one of a deliberate set of vocabulary swaps — sprints
+become bolts, epics become Units of Work (the `U1`–`U11` in
+[`../04-units-of-work.md`](../04-units-of-work.md)), backlog refinement becomes
+Mob Elaboration. The premise is that when an AI drafts requirements, design and
+code, the feedback loop compresses far enough that a two-week batch stops being
+a useful unit of planning.
+
+AWS does not explain the choice of word. The obvious reading is lightning —
+short and fast — as against "sprint", which still implies a fixed distance paced
+out in advance. That is inference, not a sourced claim.
+
+## A known inaccuracy in this numbering
+
+**Bolt 00 is not strictly a bolt.** Bolts belong to the **Construction** phase;
+Inception, Construction and Operations are the three *phases*, and bolts are the
+execution mechanism inside Construction. Bolt 00 is the Inception phase, and
+numbering it as a bolt is a misuse of the term.
+
+It is kept at 00 because the commit messages, the units-of-work table and the
+audit log all reference these numbers, and renumbering to be pedantically
+correct would break more than it fixes. Recorded here rather than quietly left
+for a reader who knows the methodology to notice.
+
+Bolts 01 onward are Construction, and Bolt 09 is closer to Operations than to
+Construction — verification on real platforms, not new code.
+
+## Structure
+
 One directory per bolt. Each holds a `plan.md` written to be reviewable before
 work starts, and an `execution.md` recording what actually happened — including
 where the two diverged.

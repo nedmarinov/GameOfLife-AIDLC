@@ -9,6 +9,10 @@
 **Unit(s):** —
 **Status:** complete
 
+> **Not strictly a bolt.** Bolts belong to AI-DLC's Construction phase; this is
+> the Inception phase. Kept at 00 for continuity with the commit history and the
+> audit log. See [`../README.md`](../README.md).
+
 ## Goal
 
 Turn a one-page brief into requirements that can be tested, decisions that can be reviewed, and a decomposition that can be sequenced.
