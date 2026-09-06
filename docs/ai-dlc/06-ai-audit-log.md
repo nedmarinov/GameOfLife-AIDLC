@@ -22,6 +22,7 @@ Each is a defect this problem is known to invite, and each has a guard.
 | A7 | `lock` sprinkled through `Universe` instead of single-writer ownership | `Universe` contains no synchronisation primitives at all |
 | A8 | Neighbour counting that visits dead space, reintroducing O(universe) | step iterates live cells only; complexity argued in 05-logical-design |
 | A9 | Trusting an attacker-controlled length prefix, so five bytes can make the server buffer gigabytes | `FrameCodec.MaxPayloadLength`; `Rejects_An_Absurd_Declared_Length_Without_Buffering_It` |
+| A10 | Passing a client-supplied file name to the filesystem, allowing path traversal reads and writes | `PatternStore` resolves and bounds every path; `PatternStoreTests` |
 
 ## Log
 
@@ -196,3 +197,58 @@ refused outright: *"Constant value '1.8446744073709552E+19' cannot be converted
 to 'ulong'"*. The compiler rejected the constant-folded form of exactly the
 conversion the converter exists to prevent at runtime. The test now reads the
 value from an array so the demonstration survives to execution.
+
+
+### Bolt 4 — Server
+
+**Entry 4 — cleanup that closed the socket out from under the writer.**
+
+*Symptom:* `A_Malformed_Frame_Is_Answered_Then_The_Connection_Ends` passed when
+run alone and failed in the full suite, with the client reporting *"Server
+closed the connection"* before the promised `ErrorMessage` arrived. A flaky test
+is normally the test's fault. This one was the server's.
+
+*First layer, found by reading the shutdown path:* on a protocol violation the
+read loop queued an `ErrorMessage` and returned; `ServeAsync` then cancelled the
+write loop through `Task.WhenAny` and the `finally`. The message was queued and
+the queue was abandoned. The server had a documented promise — refusals are
+explicit, never silent — and a shutdown path that quietly broke it whenever the
+refusal was the *last* thing to send.
+
+*Second layer, the actual root cause:* fixing the ordering did not fix the test.
+`PipeReader.Create(Stream)` defaults to **`leaveOpen: false`**, so the read
+loop's own `reader.CompleteAsync()` in its `finally` disposed the
+`NetworkStream`. The socket was closed by the reader's cleanup before the writer
+could flush anything. The first fix was correct and insufficient; the defect was
+one layer below where the symptom pointed.
+
+*Shipped:*
+- `PipeReader.Create(stream, new StreamPipeReaderOptions(leaveOpen: true))`, so
+  the reader's lifecycle no longer owns the socket's.
+- `CompleteOutbound()` separates graceful shutdown (stop accepting, drain what
+  is queued) from `Close()` (abandon now), and `ServeAsync` awaits the flush
+  under a two-second timeout so a peer that will not read cannot hold the
+  connection open.
+- `WriteLoopAsync` now exits on queue *completion* rather than cancellation, so
+  the last message on a doomed connection still goes out.
+
+*Why it matters:* every individual piece was defensible. The read loop
+completing its own reader is correct hygiene; `Task.WhenAny` on two loops is a
+normal pattern; a bounded queue is the right design. The defect lived in the
+interaction, and only appeared when two connections ran concurrently — which is
+why it showed up in the full suite and not in isolation. Concurrency defects
+that hide under sequential testing are exactly what a per-file review does not
+catch.
+
+*Guard:* the test now runs green five consecutive times, and the full suite
+three, since a single green run proves nothing about a race.
+
+**A10 added and guarded proactively.** Load and save take a file name from a
+network peer. Handing that to the filesystem unchecked is a path traversal, and
+the write side is the damaging half — any client could overwrite any file the
+server process can reach. `PatternStore` resolves each candidate against its
+root and requires the result to stay beneath it, which rejects `..`, absolute
+paths and symlink escapes together rather than blocklisting patterns. The
+boundary check compares against root-plus-separator, so a sibling directory
+whose name merely *starts with* the root (`/data-evil` against `/data`) is
+rejected too — the defect a naive `StartsWith` would have shipped.
