@@ -68,14 +68,83 @@ public class RleTests
     }
 
     [Fact]
-    public void Reads_Origin_And_Generation_From_Tagged_Comments()
+    public void Reads_Position_And_Generation_From_A_CXRLE_Line()
     {
         RlePattern pattern = Rle.Parse(
-            "#C origin: 18446744073709551615 42\n#C generation: 1234\nx = 1, y = 1, rule = B3/S23\no!");
+            "#CXRLE Pos=-1,42 Gen=1234\nx = 1, y = 1, rule = B3/S23\no!");
 
         Assert.Equal(new Cell(ulong.MaxValue, 42), pattern.Origin);
         Assert.Equal(1234UL, pattern.Generation);
         Assert.Empty(pattern.Comments);
+    }
+
+    [Fact]
+    public void Accepts_A_CXRLE_Position_In_Either_Signed_Or_Unsigned_Form()
+    {
+        // The same 64 bits, written both ways. On a 2^64 torus they are the
+        // same cell, so both must parse to it.
+        RlePattern asSigned = Rle.Parse("#CXRLE Pos=-2,-2\nx = 1, y = 1, rule = B3/S23\no!");
+        RlePattern asUnsigned = Rle.Parse(
+            "#CXRLE Pos=18446744073709551614,18446744073709551614\nx = 1, y = 1, rule = B3/S23\no!");
+
+        Assert.Equal(new Cell(ulong.MaxValue - 1, ulong.MaxValue - 1), asSigned.Origin);
+        Assert.Equal(asSigned.Origin, asUnsigned.Origin);
+    }
+
+    [Fact]
+    public void Ignores_Unknown_CXRLE_Keywords()
+    {
+        RlePattern pattern = Rle.Parse(
+            "#CXRLE Pos=5,6 Zoom=4 Gen=9\nx = 1, y = 1, rule = B3/S23\no!");
+
+        Assert.Equal(new Cell(5, 6), pattern.Origin);
+        Assert.Equal(9UL, pattern.Generation);
+    }
+
+    [Fact]
+    public void Writes_Position_As_Its_Signed_Reinterpretation()
+    {
+        var universe = new Universe();
+        universe.Reset([new Cell(ulong.MaxValue - 1, ulong.MaxValue - 1)]);
+
+        string text = Rle.Format(universe);
+
+        Assert.Contains("#CXRLE Pos=-2,-2", text);
+    }
+
+    [Fact]
+    public void Omits_Generation_When_Zero_As_Golly_Does()
+    {
+        var universe = new Universe();
+        universe.Reset([new Cell(0, 0)]);
+
+        Assert.DoesNotContain("Gen=", Rle.Format(universe));
+    }
+
+    [Fact]
+    public void Every_Shipped_Pattern_Has_A_Position_Inside_The_Signed_Range()
+    {
+        // Guards a mistake made once by hand: writing a Pos below long.MinValue.
+        // Every coordinate must survive the ulong -> long -> ulong round trip
+        // that Extended RLE requires.
+        foreach (string file in Directory.GetFiles(Path.GetDirectoryName(PatternPath("x"))!, "*.rle"))
+        {
+            RlePattern pattern = Rle.ParseFile(file);
+            string name = Path.GetFileName(file);
+
+            ulong x = unchecked((ulong)unchecked((long)pattern.Origin.X));
+            ulong y = unchecked((ulong)unchecked((long)pattern.Origin.Y));
+
+            Assert.True(x == pattern.Origin.X, $"{name}: X did not survive the signed round trip.");
+            Assert.True(y == pattern.Origin.Y, $"{name}: Y did not survive the signed round trip.");
+
+            // And the file's own text must match what our writer would emit.
+            var universe = new Universe();
+            universe.Reset(pattern.Cells, pattern.Generation);
+            Assert.Contains(
+                $"Pos={unchecked((long)pattern.Origin.X)},{unchecked((long)pattern.Origin.Y)}",
+                Rle.Format(universe));
+        }
     }
 
     [Fact]
@@ -126,7 +195,7 @@ public class RleTests
     public void Rejects_A_Malformed_Origin()
     {
         Assert.Throws<FormatException>(
-            () => Rle.Parse("#C origin: nonsense\nx = 1, y = 1, rule = B3/S23\no!"));
+            () => Rle.Parse("#CXRLE Pos=nonsense,3\nx = 1, y = 1, rule = B3/S23\no!"));
     }
 
     // ------------------------------------------------------- round-tripping

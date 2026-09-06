@@ -19,8 +19,7 @@ namespace GameOfLife.Core;
 /// </remarks>
 public static class Rle
 {
-    private const string OriginTag = "origin:";
-    private const string GenerationTag = "generation:";
+    private const string ExtendedPrefix = "#CXRLE";
     private const int MaxOutputLineLength = 70;
 
     // ---------------------------------------------------------------- read
@@ -83,6 +82,15 @@ public static class Rle
     {
         if (line.Length < 2) return;
 
+        // Checked against the whole line: '#CXRLE' shares its first two
+        // characters with an ordinary '#C' comment, so it has to be recognised
+        // before the tag is consumed.
+        if (line.StartsWith(ExtendedPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            ReadExtendedLine(line[ExtendedPrefix.Length..], ref origin, ref generation);
+            return;
+        }
+
         char tag = line[1];
         string value = line.Length > 2 ? line[2..].Trim() : string.Empty;
 
@@ -94,42 +102,81 @@ public static class Rle
 
         if (tag is not ('C' or 'c'))
         {
-            // #O (author), #P / #R (position), #r (rules) and anything else are
-            // preserved as-is rather than reinterpreted.
+            // #O (author), #P / #R (legacy 32-bit position), #r (rules) and any
+            // unknown tag are preserved verbatim, never reinterpreted. The RLE
+            // convention is that a reader ignores tags it does not know.
             comments.Add(line[1..].Trim());
-            return;
-        }
-
-        if (value.StartsWith(OriginTag, StringComparison.OrdinalIgnoreCase))
-        {
-            origin = ParseOrigin(value[OriginTag.Length..]);
-            return;
-        }
-
-        if (value.StartsWith(GenerationTag, StringComparison.OrdinalIgnoreCase))
-        {
-            string raw = value[GenerationTag.Length..].Trim();
-            if (!ulong.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out generation))
-                throw new FormatException($"Malformed generation comment: '{value}'.");
             return;
         }
 
         comments.Add(value);
     }
 
-    private static Cell ParseOrigin(string value)
+    /// <summary>
+    /// Reads a <c>#CXRLE</c> line: space-separated <c>Keyword=Value</c> pairs,
+    /// of which <c>Pos</c> and <c>Gen</c> are defined.
+    /// </summary>
+    private static void ReadExtendedLine(string value, ref Cell origin, ref ulong generation)
     {
-        string[] parts = value.Split([' ', '\t', ','], StringSplitOptions.RemoveEmptyEntries);
-
-        if (parts.Length != 2
-            || !ulong.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out ulong x)
-            || !ulong.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out ulong y))
+        foreach (string pair in value.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
         {
-            throw new FormatException(
-                $"Malformed origin comment: 'origin:{value}'. Expected two unsigned integers.");
-        }
+            int equals = pair.IndexOf('=');
+            if (equals < 0) continue;
 
-        return new Cell(x, y);
+            string keyword = pair[..equals].Trim();
+            string operand = pair[(equals + 1)..].Trim();
+
+            if (keyword.Equals("Pos", StringComparison.OrdinalIgnoreCase))
+                origin = ParsePosition(operand);
+            else if (keyword.Equals("Gen", StringComparison.OrdinalIgnoreCase))
+                generation = ParseGeneration(operand);
+
+            // Unknown keywords are ignored, as the format requires.
+        }
+    }
+
+    /// <summary>
+    /// Parses a signed <c>Pos</c> pair into unsigned universe coordinates.
+    /// </summary>
+    /// <remarks>
+    /// Extended RLE writes signed coordinates; this universe uses
+    /// <see cref="ulong"/>. On a torus of exactly 2^64 cells per axis both are
+    /// residues modulo 2^64, so the signed and unsigned readings of the same 64
+    /// bits name the same cell. The conversion is therefore a bit
+    /// reinterpretation that loses nothing in either direction.
+    /// </remarks>
+    private static Cell ParsePosition(string value)
+    {
+        string[] parts = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length < 2)
+            throw new FormatException($"Malformed CXRLE Pos: '{value}'. Expected 'Pos=x,y'.");
+
+        return new Cell(ToCoordinate(parts[0], value), ToCoordinate(parts[1], value));
+    }
+
+    private static ulong ToCoordinate(string token, string context)
+    {
+        if (long.TryParse(token, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long signed))
+            return unchecked((ulong)signed);
+
+        // Also accept the full unsigned range, which a writer targeting a 2^64
+        // universe may legitimately emit.
+        if (ulong.TryParse(token, NumberStyles.None, CultureInfo.InvariantCulture, out ulong unsigned))
+            return unsigned;
+
+        throw new FormatException($"Malformed CXRLE Pos component '{token}' in '{context}'.");
+    }
+
+    private static ulong ParseGeneration(string value)
+    {
+        if (ulong.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out ulong generation))
+            return generation;
+
+        if (long.TryParse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long signed))
+            return unchecked((ulong)signed);
+
+        throw new FormatException($"Malformed CXRLE Gen: '{value}'.");
     }
 
     private static (int Width, int Height) ReadHeaderLine(string line)
@@ -252,18 +299,17 @@ public static class Rle
 
         if (live.Length == 0)
         {
-            builder.Append("#C origin: 0 0\n")
-                   .Append("#C generation: ").Append(generation).Append('\n')
-                   .Append("x = 0, y = 0, rule = ").Append(RlePattern.ConwayRule).Append("\n!\n");
+            AppendExtendedLine(builder, 0, 0, generation);
+            builder.Append("x = 0, y = 0, rule = ").Append(RlePattern.ConwayRule).Append("\n!\n");
             return builder.ToString();
         }
 
         (ulong originX, int width) = BoundingSpan(live.Select(c => c.X));
         (ulong originY, int height) = BoundingSpan(live.Select(c => c.Y));
 
-        builder.Append("#C origin: ").Append(originX).Append(' ').Append(originY).Append('\n')
-               .Append("#C generation: ").Append(generation).Append('\n')
-               .Append("x = ").Append(width)
+        AppendExtendedLine(builder, originX, originY, generation);
+
+        builder.Append("x = ").Append(width)
                .Append(", y = ").Append(height)
                .Append(", rule = ").Append(RlePattern.ConwayRule).Append('\n');
 
@@ -273,6 +319,32 @@ public static class Rle
 
     public static void WriteFile(Universe universe, string path, string? name = null) =>
         File.WriteAllText(path, Format(universe, name));
+
+    /// <summary>
+    /// Writes the Extended RLE metadata line.
+    /// </summary>
+    /// <remarks>
+    /// Coordinates are emitted as their signed reinterpretation. On a 2^64
+    /// torus that names the same cell (see <see cref="ParsePosition"/>), and it
+    /// keeps values inside the range other tools expect instead of overflowing
+    /// it: an origin two cells before the wrap point is written as -2 rather
+    /// than 18446744073709551614.
+    /// </remarks>
+    private static void AppendExtendedLine(
+        StringBuilder builder, ulong originX, ulong originY, ulong generation)
+    {
+        builder.Append("#CXRLE Pos=")
+               .Append(unchecked((long)originX).ToString(CultureInfo.InvariantCulture))
+               .Append(',')
+               .Append(unchecked((long)originY).ToString(CultureInfo.InvariantCulture));
+
+        // Golly writes Gen only when non-zero; matching that keeps our output
+        // byte-identical to what it would produce.
+        if (generation != 0)
+            builder.Append(" Gen=").Append(generation.ToString(CultureInfo.InvariantCulture));
+
+        builder.Append('\n');
+    }
 
     /// <summary>
     /// Finds the occupied span on one axis of the toroidal universe.

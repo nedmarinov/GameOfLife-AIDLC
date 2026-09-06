@@ -3,13 +3,16 @@
 #C in 1970. It emits one glider every 30 generations, so the population grows
 #C without bound while the gun itself returns to its starting shape.
 #C
-#C Placed near the centre of the 2^64 x 2^64 universe. The origin and
-#C generation lines below are this project's extension for restoring absolute
-#C position in a universe far larger than RLE was designed to describe; they
-#C are plain #C comments, so any standard Life tool ignores them and reads
-#C this as an ordinary glider gun.
-#C origin: 9223372036854775790 9223372036854775804
-#C generation: 0
+#C Placed near the centre of the 2^64 x 2^64 universe: the 36-wide gun is
+#C centred on 2^63, so its top-left sits at 2^63-18, 2^63-4.
+#C
+#C The CXRLE line below is Golly's Extended RLE metadata, so the absolute
+#C position is restored by other tools rather than merely tolerated as a
+#C comment. Pos is signed, which costs nothing here on a 2^64 torus: both
+#C readings of the same 64 bits name the same cell. This origin is below
+#C 2^63, so its signed reading is unchanged. See patterns/glider.rle for the
+#C case where it is not.
+#CXRLE Pos=9223372036854775790,9223372036854775804
 x = 36, y = 9, rule = B3/S23
 24bo$22bobo$12b2o6b2o12b2o$11bo3bo4b2o12b2o$2o8bo5bo3b2o$2o8bo3bob2o4b
 obo$10bo5bo7bo$11bo3bo$12b2o!

@@ -97,10 +97,9 @@ is with a misreading of the spec. The whole reason ADR 0004 chose RLE was
 interoperability, and the extension quietly undermined the property it was
 chosen for.
 
-*Shipped instead:* tagged free-text comments — `#C origin: <x> <y>` and
-`#C generation: <n>`. `#C` is unambiguously free text in every implementation,
-so it cannot collide with a defined tag. `#P` / `#R`, the real position tags,
-were also rejected: they hold signed 32-bit values and cannot express a `ulong`.
+*Shipped instead:* initially tagged free-text comments — `#C origin:` and
+`#C generation:`. That fixed the collision but was itself superseded; see
+entry 3.
 
 *Guard added:* `Writer_Reproduces_The_Canonical_Published_Gun_Body` asserts the
 writer's output matches the Gosper gun exactly as published, wrap position
@@ -108,3 +107,55 @@ included. Round-tripping through our own parser could never have caught the
 `#O` defect — a reader and writer that share a misreading agree with each other
 perfectly. The acceptance criterion for U4 is now an oracle outside this
 project, not self-consistency.
+
+
+**Entry 3 — inventing a convention that already existed.**
+
+*Found by:* being asked to document every RLE tag and say where each meaning
+came from. The request was the guard. Nothing in the code or the tests could
+have surfaced this.
+
+*What the documentation pass turned up:* the fix in entry 2 — carrying position
+and generation in `#C origin:` / `#C generation:` comments — was a private
+convention for a problem the format had already solved. Golly's **Extended RLE**
+defines `#CXRLE Pos=x,y Gen=n` for precisely this, and Golly *restores* those
+values on load. Our version would have been silently discarded by every tool
+that read it, while looking correct in ours.
+
+*Why it happened:* entry 2 corrected a specific wrong claim (`#O` means author)
+without revisiting the premise underneath it — that an extension was needed at
+all. Fixing the error rather than re-reading the spec left the larger mistake
+standing. The verification was aimed at the answer, not at the question.
+
+*Shipped instead:* `#CXRLE Pos=…` with `Gen=` omitted when zero, matching
+Golly's own output byte for byte. `Pos` is signed and our coordinates unsigned,
+which turns out to cost nothing: on a torus of exactly 2^64 cells per axis both
+are residues modulo 2^64, so the signed and unsigned readings of the same 64
+bits name the same cell. The conversion is a bit reinterpretation that loses
+nothing in either direction, and it keeps emitted values inside the range other
+tools expect.
+
+*Second defect, found while fixing the first:* the hand-written `Pos` for the
+Gosper gun was `-9223372036854775826`, which is below `long.MinValue` and
+therefore not a value any reader could accept. The gun's origin is `2^63 - 18`,
+which is *under* 2^63 and so unchanged by the signed reinterpretation — the
+negation was applied where it did not belong. Arithmetic done by hand in a data
+file that no test covered.
+
+*Guards added:*
+- `docs/rle-format.md` records every tag, its meaning, and the source it came
+  from, with each claim marked *Verified* (read in a fetched source) or
+  *Reported* (from a summary, LifeWiki being unreachable). Provenance is now
+  part of the artifact, so the next correction starts from evidence.
+- `Every_Shipped_Pattern_Has_A_Position_Inside_The_Signed_Range` asserts every
+  shipped file's origin survives the `ulong -> long -> ulong` round trip *and*
+  matches what the writer would emit. Hand-authored data files are now covered
+  by the same tests as generated ones.
+- `Accepts_A_CXRLE_Position_In_Either_Signed_Or_Unsigned_Form` pins the
+  equivalence the design relies on.
+
+*The transferable lesson:* entry 2's correction was verified against the claim
+it replaced, not against the format. Checking that `#O` was wrong did not
+prompt asking whether the format already had a right answer. When a defect is
+found in an assumption, the assumptions next to it are the ones most likely to
+be wrong too.

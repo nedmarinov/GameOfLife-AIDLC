@@ -3,7 +3,8 @@
 #C which makes it the clearest probe for the 2^64 seam: its displacement is
 #C exactly predictable, so an incorrect wrap shows as a wrong position rather
 #C than a plausible-looking mess.
-#C origin: 18446744073709551614 18446744073709551614
-#C generation: 0
+#C Positioned two cells before the wrap point, so it crosses the seam within
+#C four generations. Pos is the signed reading of the same 64 bits.
+#CXRLE Pos=-2,-2
 x = 3, y = 3, rule = B3/S23
 bo$2bo$3o!
