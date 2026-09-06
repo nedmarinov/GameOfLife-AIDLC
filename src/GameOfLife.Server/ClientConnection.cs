@@ -38,20 +38,28 @@ internal sealed class ClientConnection : IAsyncDisposable
     /// </remarks>
     private const int EgressCapacity = 2;
 
-    private readonly TcpClient _socket;
+    private readonly Stream _stream;
+    private readonly IDisposable? _owner;
     private readonly Channel<ReadOnlyMemory<byte>> _egress;
     private readonly CancellationTokenSource _closing = new();
 
     private int _droppedFrames;
 
-    public ClientConnection(TcpClient socket, int id)
+    /// <summary>
+    /// Wraps any duplex byte stream carrying framed messages.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a <see cref="Stream"/> rather than a socket: the same
+    /// connection logic serves a raw TCP client and a browser over WebSocket,
+    /// because the frame format is one specification with two transports. Only
+    /// the bytes' delivery differs.
+    /// </remarks>
+    public ClientConnection(Stream stream, int id, string description, IDisposable? owner = null)
     {
-        _socket = socket;
+        _stream = stream;
+        _owner = owner;
         Id = id;
-
-        // Nagle would coalesce our small frames and add latency to a stream
-        // whose whole purpose is timely updates.
-        _socket.NoDelay = true;
+        Description = description;
 
         _egress = Channel.CreateBounded<ReadOnlyMemory<byte>>(
             new BoundedChannelOptions(EgressCapacity)
@@ -63,6 +71,9 @@ internal sealed class ClientConnection : IAsyncDisposable
     }
 
     public int Id { get; }
+
+    /// <summary>Where this client came from, for the log.</summary>
+    public string Description { get; }
 
     /// <summary>
     /// The window this client is watching.
@@ -114,7 +125,7 @@ internal sealed class ClientConnection : IAsyncDisposable
         // discarding whatever it had left to flush, including the ErrorMessage
         // that explains why the connection is ending.
         PipeReader reader = PipeReader.Create(
-            _socket.GetStream(), new StreamPipeReaderOptions(leaveOpen: true));
+            _stream, new StreamPipeReaderOptions(leaveOpen: true));
 
         try
         {
@@ -179,14 +190,13 @@ internal sealed class ClientConnection : IAsyncDisposable
     /// </remarks>
     public async Task WriteLoopAsync(CancellationToken cancellationToken)
     {
-        NetworkStream stream = _socket.GetStream();
-
         try
         {
             await foreach (ReadOnlyMemory<byte> frame in
                 _egress.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+                await _stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+                await _stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -243,7 +253,9 @@ internal sealed class ClientConnection : IAsyncDisposable
     {
         await _closing.CancelAsync().ConfigureAwait(false);
         _egress.Writer.TryComplete();
-        _socket.Dispose();
+
+        await _stream.DisposeAsync().ConfigureAwait(false);
+        _owner?.Dispose();
         _closing.Dispose();
     }
 }

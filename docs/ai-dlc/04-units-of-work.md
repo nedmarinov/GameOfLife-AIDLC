@@ -4,7 +4,7 @@ Decomposition into independently reviewable units. Each unit has one owner
 concept, an explicit done condition, and a human gate. Nothing advances on AI
 output alone.
 
-All units through U9 are complete except the cross-platform half of U9, which
+All units through U10 are complete except the cross-platform half of U9, which
 is recorded as outstanding rather than assumed.
 
 | Unit | Owns | Done when | Gate | Status |
@@ -18,6 +18,7 @@ is recorded as outstanding rather than assumed.
 | U7 Server | listener, sim loop, channels, fan-out | 3 clients observe one sim | concurrency model walked through aloud | done |
 | U8 Console client | render, input, reconnect | edit on one client appears on others | two-client run, identical gens 0..206 | done |
 | U9 Docs | README, ADRs, audit log | clean clone runs on 3 OSes | full clean-clone verification | **docs done; Linux and Windows runs outstanding** |
+| U10 Web bridge | RFC 6455 handshake, WebSocket transport, browser client | a browser and a terminal share one universe | handshake checked against the RFC's worked example | done |
 
 ## Dependency order
 
@@ -36,4 +37,4 @@ as small as possible.
 ## Mapping to bolts
 
 Bolt 1 = U1+U2+U3 · Bolt 2 = U4 · Bolt 3 = U5+U6 · Bolt 4 = U7 ·
-Bolt 5 = U8 · Bolt 6 = U9 · Bolt 7 = stretch WebSocket bridge + HTML client.
+Bolt 5 = U8 · Bolt 6 = U9 · Bolt 7 = U10.

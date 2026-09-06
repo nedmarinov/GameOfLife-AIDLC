@@ -7,6 +7,9 @@ dotnet run --project src/GameOfLife.Server -- --run
 dotnet run --project src/GameOfLife.Client.Console
 ```
 
+or open <http://localhost:5151> for the browser client, which the server serves
+itself.
+
 Server options are listed in the README. The client takes `--host` and
 `--port`.
 
@@ -55,6 +58,15 @@ or is not being decoded as UTF-8.
 
 **The window is cut off.** The client needs 100 columns and 53 rows. It prints
 the required size on startup if the terminal is smaller.
+
+**The browser page will not load.** The bridge serves `web/index.html`, found by
+walking up from the binary. If the file is missing the bridge answers 404 rather
+than failing to start, so the terminal client is unaffected. `--no-web` turns the
+bridge off entirely.
+
+**The browser connects then immediately disconnects.** Check the port in the
+page's WebSocket URL matches `--web-port`; the page derives it from
+`location.host`, so this only happens behind a proxy.
 
 **The server logs `dropped N frames` on disconnect.** Working as intended: that
 client could not keep up and its stale frames were discarded rather than queued.

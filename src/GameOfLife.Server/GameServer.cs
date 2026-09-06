@@ -55,9 +55,17 @@ internal sealed class GameServer(PatternStore patterns, int port, int tickMillis
             {
                 TcpClient socket = await listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
 
+                // Nagle would coalesce our small frames and add latency to a
+                // stream whose whole purpose is timely updates.
+                socket.NoDelay = true;
+
                 // Each connection is served on its own task and is never awaited
                 // here: one client's lifetime must not gate anyone else's.
-                _ = ServeAsync(socket, cancellationToken);
+                _ = ServeAsync(
+                    socket.GetStream(),
+                    socket.Client.RemoteEndPoint?.ToString() ?? "unknown",
+                    socket,
+                    cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -68,11 +76,14 @@ internal sealed class GameServer(PatternStore patterns, int port, int tickMillis
         }
     }
 
-    private async Task ServeAsync(TcpClient socket, CancellationToken cancellationToken)
+    /// <summary>Serves one client over any duplex stream.</summary>
+    internal async Task ServeAsync(
+        Stream stream, string description, IDisposable? owner, CancellationToken cancellationToken)
     {
-        var client = new ClientConnection(socket, Interlocked.Increment(ref _nextClientId));
+        var client = new ClientConnection(
+            stream, Interlocked.Increment(ref _nextClientId), description, owner);
 
-        Console.WriteLine($"{client} connected from {socket.Client.RemoteEndPoint}");
+        Console.WriteLine($"{client} connected from {description}");
 
         await _simulation.Commands.WriteAsync(new ClientConnected(client), cancellationToken)
             .ConfigureAwait(false);

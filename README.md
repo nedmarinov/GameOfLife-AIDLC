@@ -7,14 +7,16 @@ clients connect over TCP and watch the same generations tick.
 dotnet run --project src/GameOfLife.Server -- --run
 ```
 
-then, in one or more other terminals:
+then either open **<http://localhost:5151>** in a browser, or run the terminal
+client in one or more other terminals:
 
 ```
 dotnet run --project src/GameOfLife.Client.Console
 ```
 
-You should see Gosper's glider gun firing. Open a third terminal and it shows
-the same thing, in step. Nothing else to install — .NET 9 and a terminal.
+You should see Gosper's glider gun firing. Open more of either kind and they all
+show the same thing, in step — a browser tab and a terminal are the same client
+to the server. Nothing else to install: .NET 9, and a terminal or a browser.
 
 ## The console client
 
@@ -35,6 +37,20 @@ The window is 100x100 cells drawn in 100x50 characters: the half-block glyph
 `▀` carries two cells, its foreground colour painting the upper one and its
 background the lower.
 
+## The browser client
+
+Served by the server itself at <http://localhost:5151> — no build step, no
+bundler, one static file. Click to toggle cells while paused, drag to paint,
+arrow keys to pan.
+
+It speaks **the same protocol as the terminal client**, byte for byte: the
+length-prefixed frames simply travel inside WebSocket messages instead of
+directly over TCP. One specification, two transports. Coordinates use `BigInt`,
+because a JavaScript number loses precision above 2^53 and the universe runs to
+2^64 — the same reason the JSON messages carry them as strings.
+
+Run the server with `--no-web` to disable it.
+
 ## Try this
 
 Start the server paused, draw something, then run it:
@@ -48,6 +64,9 @@ Draw cells in one client with the arrow keys and space. **They appear in the
 other one**, because the server owns the universe and every client is watching
 it rather than running its own copy. Press `s` in either to start.
 
+Mix the two: draw in a browser tab and watch it appear in a terminal. The server
+does not distinguish them.
+
 To watch the torus actually wrap, load the glider that ships positioned two
 cells before the edge of the universe — press `o`, then type `glider.rle`. It
 crosses `ulong.MaxValue` and arrives at the far side within four generations.
@@ -58,7 +77,7 @@ crosses `ulong.MaxValue` and arrives at the far side within four generations.
 dotnet test
 ```
 
-163 tests. The ones worth reading are in
+171 tests. The ones worth reading are in
 [TorusTests.cs](tests/GameOfLife.Core.Tests/TorusTests.cs) — a glider crossing
 the `ulong.MaxValue` seam in both dimensions, and one wrapping in a single
 dimension, which is where a hand-written modulo implementation typically breaks.
@@ -106,7 +125,10 @@ client joining mid-run become consistent with no replay logic.
 **Transport is raw TCP** with a length-prefixed binary framing protocol on
 `System.IO.Pipelines`. Control messages are JSON, so the wire is readable with
 `tcpdump` and no decoder; the per-generation frame is a fixed 1,278 bytes for a
-100x100 window whatever the population.
+100x100 window whatever the population. Browsers get the identical frames
+inside WebSocket messages: the RFC 6455 handshake is done by hand, the framing
+is left to the runtime, and a connection is the same object to the server
+either way.
 
 ## Layout
 
@@ -114,7 +136,8 @@ client joining mid-run become consistent with no replay logic.
 src/GameOfLife.Core             universe, torus arithmetic, viewport, RLE. No dependencies.
 src/GameOfLife.Protocol         framing and message codecs. Knows bytes, not sockets.
 src/GameOfLife.Server           TCP listener, simulation loop, client fan-out
-src/GameOfLife.Client.Console   observer and editor
+src/GameOfLife.Client.Console   terminal observer and editor
+web/index.html                  browser client, served by the server
 patterns/                       Gosper glider gun and friends, in standard RLE
 docs/                           design decisions, and how this was built
 ```
@@ -141,6 +164,8 @@ before anything touches the filesystem.
 --pattern <file>  seed pattern (default gosper-glider-gun.rle)
 --empty           start with an empty universe
 --run             begin ticking immediately
+--web-port <n>    browser client port (default 5151)
+--no-web          do not serve the browser client
 ```
 
 ## Design notes

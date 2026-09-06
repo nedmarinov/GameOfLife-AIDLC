@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Game of Life — 2^64 × 2^64</title>
+<style>
+  :root {
+    --bg: #12141a; --panel: #1a1d26; --line: #2a2f3d;
+    --ink: #e6e9f0; --dim: #8b93a7; --live: #f2f4f8; --accent: #6ea8fe; --warn: #ffb454;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px;
+  }
+  h1 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+  h1 span { color: var(--dim); font-weight: 400; }
+  #board {
+    image-rendering: pixelated; background: #0b0d12;
+    border: 1px solid var(--line); border-radius: 4px; cursor: crosshair;
+    width: min(76vh, 96vw); height: min(76vh, 96vw); touch-action: none;
+  }
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center;
+    width: min(76vh, 96vw);
+  }
+  button {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 4px; padding: 5px 11px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  .stats { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; color: var(--dim); }
+  .stats b { color: var(--ink); font-weight: 600; }
+  #notice { color: var(--warn); min-height: 1.5em; text-align: center; }
+  .hint { color: var(--dim); text-align: center; max-width: 62ch; }
+  code { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>Conway's Game of Life <span>— one server, a 2<sup>64</sup> × 2<sup>64</sup> torus</span></h1>
+
+<canvas id="board" width="100" height="100"></canvas>
+
+<div class="bar">
+  <button id="run">start</button>
+  <button id="step">step</button>
+  <button id="clear">clear</button>
+  <button id="faster">faster</button>
+  <button id="slower">slower</button>
+  <button id="centre">centre</button>
+  <button id="gun">load gun</button>
+  <button id="glider">load seam glider</button>
+</div>
+
+<div class="bar stats">
+  <span>gen <b id="gen">0</b></span>
+  <span>pop <b id="pop">0</b></span>
+  <span>tick <b id="tick">—</b></span>
+  <span>origin <b id="origin">—</b></span>
+  <span><b id="link">connecting…</b></span>
+</div>
+
+<div id="notice"></div>
+
+<p class="hint">
+  Click a cell to toggle it while paused. Drag to paint. Arrow keys pan the
+  window. Everything you do here happens on the server, so every other client —
+  browser or terminal — sees it too.
+</p>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---- wire format: the same frames the native client speaks -------------
+  //   u32 length (covers type + payload) | u8 type | payload
+  //   type 1 = JSON control, 2 = viewport bitmap
+  //   viewport payload: u64 gen | u64 originX | u64 originY | u16 w | u16 h | bitmap
+  const CONTROL = 1, VIEWPORT = 2;
+  const SIZE = 100;
+
+  const canvas = document.getElementById("board");
+  const ctx = canvas.getContext("2d");
+  const image = ctx.createImageData(SIZE, SIZE);
+
+  const el = id => document.getElementById(id);
+  const state = { origin: [0n, 0n], running: false, tick: 100, painting: false, painted: null };
+
+  let socket = null, retry = 250;
+
+  // BigInt throughout: coordinates run to 2^64-1, and a JS number loses
+  // precision above 2^53 -- the same reason the JSON messages carry them as
+  // strings rather than numbers.
+  const readU64 = (view, offset) => view.getBigUint64(offset, true);
+
+  function connect() {
+    socket = new WebSocket(`ws://${location.host}/ws`);
+    socket.binaryType = "arraybuffer";
+
+    socket.onopen = () => {
+      retry = 250;
+      el("link").textContent = "connected";
+      // The server remembers nothing about a client that went away, so a
+      // reconnect restates the window it wants.
+      send({ op: "subscribe", originX: state.origin[0].toString(),
+             originY: state.origin[1].toString(), width: SIZE, height: SIZE });
+    };
+
+    socket.onmessage = e => onFrame(new Uint8Array(e.data));
+
+    socket.onclose = () => {
+      el("link").textContent = "reconnecting…";
+      setTimeout(connect, retry);
+      retry = Math.min(retry * 2, 5000);
+    };
+
+    socket.onerror = () => socket.close();
+  }
+
+  function send(message) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+    const payload = new TextEncoder().encode(JSON.stringify(message));
+    const frame = new Uint8Array(5 + payload.length);
+    const view = new DataView(frame.buffer);
+
+    view.setUint32(0, payload.length + 1, true);   // length covers the type byte
+    frame[4] = CONTROL;
+    frame.set(payload, 5);
+
+    socket.send(frame);
+  }
+
+  function onFrame(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const declared = view.getUint32(0, true);
+    const type = bytes[4];
+    const payload = bytes.subarray(5, 4 + declared);
+
+    if (type === VIEWPORT) return drawViewport(payload);
+    if (type === CONTROL) return onControl(JSON.parse(new TextDecoder().decode(payload)));
+  }
+
+  function onControl(message) {
+    if (message.op === "hello" || message.op === "status") {
+      state.running = message.running;
+      state.tick = message.tickMilliseconds;
+      el("gen").textContent = message.generation;
+      el("pop").textContent = message.population;
+      el("tick").textContent = message.tickMilliseconds + "ms";
+      el("run").textContent = message.running ? "pause" : "start";
+      if (message.op === "hello") el("notice").textContent = "";
+    } else if (message.op === "error") {
+      el("notice").textContent = message.message;
+      setTimeout(() => (el("notice").textContent = ""), 2500);
+    }
+  }
+
+  function drawViewport(payload) {
+    const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+
+    const generation = readU64(view, 0);
+    state.origin = [readU64(view, 8), readU64(view, 16)];
+    const width = view.getUint16(24, true);
+    const height = view.getUint16(26, true);
+    const bitmap = payload.subarray(28);
+
+    el("gen").textContent = generation.toString();
+    el("origin").textContent = `${state.origin[0]}, ${state.origin[1]}`;
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    const pixels = image.data;
+    let alive = 0;
+
+    for (let i = 0; i < width * height; i++) {
+      const on = (bitmap[i >> 3] >> (i & 7)) & 1;
+      const p = i << 2;
+
+      if (on) { alive++; pixels[p] = 242; pixels[p + 1] = 244; pixels[p + 2] = 248; }
+      else { pixels[p] = 11; pixels[p + 1] = 13; pixels[p + 2] = 18; }
+
+      pixels[p + 3] = 255;
+    }
+
+    ctx.putImageData(image, 0, 0);
+  }
+
+  // ---- input ------------------------------------------------------------
+
+  function cellAt(event) {
+    const box = canvas.getBoundingClientRect();
+    const x = Math.floor((event.clientX - box.left) / box.width * SIZE);
+    const y = Math.floor((event.clientY - box.top) / box.height * SIZE);
+
+    if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) return null;
+
+    // Wrap with BigInt.asUintN so a window straddling the seam addresses the
+    // same cells the server does.
+    return [
+      BigInt.asUintN(64, state.origin[0] + BigInt(x)),
+      BigInt.asUintN(64, state.origin[1] + BigInt(y)),
+    ];
+  }
+
+  function toggle(event) {
+    const cell = cellAt(event);
+    if (!cell) return;
+
+    const key = cell.join();
+    if (state.painted === key) return;      // one toggle per cell per drag
+    state.painted = key;
+
+    send({ op: "toggle", x: cell[0].toString(), y: cell[1].toString() });
+  }
+
+  canvas.addEventListener("pointerdown", e => {
+    state.painting = true;
+    state.painted = null;
+    canvas.setPointerCapture(e.pointerId);
+    toggle(e);
+  });
+  canvas.addEventListener("pointermove", e => state.painting && toggle(e));
+  canvas.addEventListener("pointerup", () => { state.painting = false; state.painted = null; });
+
+  const control = (action, value) => send({ op: "control", action, value: value ?? 0 });
+
+  el("run").onclick = () => control(state.running ? "pause" : "start");
+  el("step").onclick = () => control("step");
+  el("clear").onclick = () => control("clear");
+  el("faster").onclick = () => control("speed", Math.max(10, Math.floor(state.tick / 2)));
+  el("slower").onclick = () => control("speed", Math.min(5000, state.tick * 2));
+  el("gun").onclick = () => send({ op: "load", file: "gosper-glider-gun.rle" });
+  el("glider").onclick = () => send({ op: "load", file: "glider.rle" });
+
+  el("centre").onclick = () => {
+    const centre = (1n << 63n).toString();
+    send({ op: "subscribe", originX: centre, originY: centre, width: SIZE, height: SIZE });
+  };
+
+  addEventListener("keydown", e => {
+    const step = e.shiftKey ? SIZE / 2 : 1;
+    const pans = {
+      ArrowLeft: [-step, 0], ArrowRight: [step, 0],
+      ArrowUp: [0, -step], ArrowDown: [0, step],
+    };
+
+    if (pans[e.key]) {
+      e.preventDefault();
+      send({ op: "pan", dx: pans[e.key][0], dy: pans[e.key][1] });
+    } else if (e.key === " ") {
+      e.preventDefault();
+      control(state.running ? "pause" : "start");
+    }
+  });
+
+  connect();
+})();
+</script>
+</body>
+</html>
