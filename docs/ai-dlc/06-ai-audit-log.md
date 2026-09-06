@@ -21,6 +21,7 @@ Each is a defect this problem is known to invite, and each has a guard.
 | A6 | Unbounded per-client queue — a stalled reader becomes a memory leak | bounded channel, capacity 2, `DropOldest` (ADR 0003) |
 | A7 | `lock` sprinkled through `Universe` instead of single-writer ownership | `Universe` contains no synchronisation primitives at all |
 | A8 | Neighbour counting that visits dead space, reintroducing O(universe) | step iterates live cells only; complexity argued in 05-logical-design |
+| A9 | Trusting an attacker-controlled length prefix, so five bytes can make the server buffer gigabytes | `FrameCodec.MaxPayloadLength`; `Rejects_An_Absurd_Declared_Length_Without_Buffering_It` |
 
 ## Log
 
@@ -159,3 +160,39 @@ it replaced, not against the format. Checking that `#O` was wrong did not
 prompt asking whether the format already had a right answer. When a defect is
 found in an assumption, the assumptions next to it are the ones most likely to
 be wrong too.
+
+
+### Bolt 3 — Protocol
+
+**No defects found.** Recorded because a log that only fills up when something
+breaks is not evidence of review — the anticipated failures A4 and A5 were the
+two most likely defects in this bolt, and both were guarded before any code was
+written rather than discovered afterwards.
+
+- **A4** (`ulong` as a JSON number, losing precision above 2^53) is prevented by
+  `UInt64StringConverter` and pinned by
+  `Coordinates_Above_Two_To_The_Fifty_Three_Survive_A_Round_Trip`.
+  `A_Number_Would_Have_Lost_Precision` additionally demonstrates the defect
+  rather than only asserting its absence, so the test explains why the converter
+  exists and cannot be deleted as ceremony.
+- **A5** (framing that assumes one read yields one whole message) is pinned by
+  `Reader_Survives_A_Stream_Delivered_One_Byte_At_A_Time`, which exercises every
+  split point in a frame including inside the length prefix, and by
+  `Reader_Handles_A_Segmented_Sequence`, since Pipelines hands over
+  multi-segment sequences whenever a frame spans buffer boundaries.
+
+**A9 added to the anticipated list during construction.** The length prefix is
+attacker-controlled input: five bytes declaring `0xFFFFFFFF` would have the
+server buffer four gigabytes for a frame that never arrives, a denial of service
+that costs the sender nothing. This was not on the original list — it emerged
+from asking what a hostile peer could do with each field, which is a question
+worth asking of every wire format and was not asked at inception.
+`FrameCodec.MaxPayloadLength` bounds it at 1 MiB, three orders of magnitude
+above the largest legitimate frame.
+
+**One compile-time catch worth noting.** The test demonstrating the 2^53 defect
+was first written as `(ulong)(double)ulong.MaxValue`, which the C# compiler
+refused outright: *"Constant value '1.8446744073709552E+19' cannot be converted
+to 'ulong'"*. The compiler rejected the constant-folded form of exactly the
+conversion the converter exists to prevent at runtime. The test now reads the
+value from an array so the demonstration survives to execution.
