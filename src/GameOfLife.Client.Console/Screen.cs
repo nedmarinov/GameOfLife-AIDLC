@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 using GameOfLife.Core;
 
@@ -54,8 +55,60 @@ internal sealed class Screen
         // Half-blocks are non-ASCII, so Windows needs to be told before any
         // output happens.
         System.Console.OutputEncoding = Encoding.UTF8;
+
+        EnableVirtualTerminalOnWindows();
+
         System.Console.Write(EnterAlternateBuffer + HideCursor);
     }
+
+    /// <summary>
+    /// Turns on ANSI escape handling on Windows.
+    /// </summary>
+    /// <remarks>
+    /// macOS and Linux terminals interpret escape sequences unconditionally.
+    /// Windows does not: .NET does not enable virtual terminal processing for
+    /// you, and without it every sequence in this file is printed literally, so
+    /// the screen fills with text like <c>[38;5;231m</c> instead of a grid.
+    /// Windows Terminal happens to enable it already, but the classic console
+    /// host does not, and "works on my machine" is exactly the failure this
+    /// avoids. Failure is non-fatal: an older console simply gets no colour.
+    /// </remarks>
+    private static void EnableVirtualTerminalOnWindows()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        const int StdOutputHandle = -11;
+        const uint EnableVirtualTerminalProcessing = 0x0004;
+
+        try
+        {
+            nint handle = GetStdHandle(StdOutputHandle);
+
+            if (handle != 0 && handle != -1 && GetConsoleMode(handle, out uint mode))
+                SetConsoleMode(handle, mode | EnableVirtualTerminalProcessing);
+        }
+        catch (DllNotFoundException)
+        {
+            // Not a real Windows console. Nothing to enable.
+        }
+        catch (EntryPointNotFoundException)
+        {
+        }
+    }
+
+    // DllImport rather than LibraryImport: the source-generated form requires
+    // AllowUnsafeBlocks across the whole assembly, which three interop
+    // declarations do not justify.
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern nint GetStdHandle(int nStdHandle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetConsoleMode(nint hConsoleHandle, out uint lpMode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetConsoleMode(nint hConsoleHandle, uint dwMode);
 
     public static void Leave() => System.Console.Write(Reset + ShowCursor + LeaveAlternateBuffer);
 

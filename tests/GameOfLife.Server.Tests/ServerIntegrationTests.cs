@@ -228,6 +228,56 @@ public class ServerIntegrationTests : IAsyncLifetime
         Assert.Equal(ErrorCode.FileError, error.Code);
     }
 
+    /// <summary>
+    /// Loading moves the requesting client's window to the pattern.
+    /// </summary>
+    /// <remarks>
+    /// Without this a load of a pattern placed far from the current window
+    /// looks like a load of an empty universe -- which is exactly what the
+    /// shipped glider, positioned two cells before the 2^64 seam, would do to a
+    /// client sitting at the centre. The README tells the reader to press 'o'
+    /// and watch the glider wrap, so this is the behaviour that claim rests on.
+    /// </remarks>
+    [Fact]
+    public async Task Loading_A_Pattern_Brings_It_Into_The_Clients_Window()
+    {
+        // A glider two cells before the wrap point, saved through the server so
+        // the test does not depend on the repository's pattern files.
+        await using TestClient setup = await ConnectAsync();
+        await setup.ReadMessageAsync<HelloMessage>();
+
+        var far = new Cell(ulong.MaxValue - 1, ulong.MaxValue - 1);
+        await setup.SendAsync(new ToggleMessage { X = far.X, Y = far.Y });
+        await setup.ReadUntilViewportAsync(_ => true);
+
+        // Subscribe straight to a window around it. Expressing this as a pan
+        // delta would underflow long: the distance from the centre of the
+        // universe to the seam is larger than a signed 64-bit value can hold.
+        await setup.SendAsync(new SubscribeMessage
+        {
+            OriginX = far.Offset(-10, -10).X,
+            OriginY = far.Offset(-10, -10).Y,
+            Width = ProtocolConstants.DefaultViewportSize,
+            Height = ProtocolConstants.DefaultViewportSize,
+        });
+        await setup.ReadUntilCellAliveAsync(far);
+
+        await setup.SendAsync(new SaveMessage { File = "edge.rle" });
+        await setup.ReadMessageAsync<StatusMessage>();
+
+        // A fresh client starts at the centre of the universe, nowhere near it.
+        await using TestClient loader = await ConnectAsync();
+        await loader.ReadMessageAsync<HelloMessage>();
+
+        (Viewport before, _, _) = await loader.ReadFrameAsync();
+        Assert.False(before.TryLocate(far, out _, out _));
+
+        await loader.SendAsync(new LoadMessage { File = "edge.rle" });
+
+        // After the load the cell must be inside the window and lit.
+        await loader.ReadUntilCellAliveAsync(far);
+    }
+
     [Fact]
     public async Task Save_Then_Load_Round_Trips_Through_The_Server()
     {

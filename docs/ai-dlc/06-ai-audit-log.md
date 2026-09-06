@@ -294,3 +294,43 @@ throws when stdin is redirected, which is exactly how the client runs under a
 script or a pipe. Rather than treat that as an error, the client now runs as a
 pure observer when there is no keyboard — which is what made the two-client
 verification above possible in the first place.
+
+
+### Bolt 6 — Documentation and cross-platform
+
+**Entry 6 — a portability gap that would have passed every test and failed on a
+reviewer's machine.**
+
+*Found by:* asking what differs per platform rather than waiting for a failure.
+There was no failing test, and there could not have been: the whole suite runs
+on macOS.
+
+*What was wrong:* macOS and Linux terminals interpret ANSI escapes
+unconditionally. Windows does not, and .NET does **not** enable virtual terminal
+processing on your behalf. Without it the client prints every escape literally
+and the screen fills with text like `[38;5;231m` instead of a grid. Windows
+Terminal happens to enable it already, so this is precisely the defect that
+works on one reviewer's machine and fails on another's — and it would have been
+reported as "your client doesn't work", not as a terminal setting.
+
+*Shipped:* `Screen.Enter` calls `SetConsoleMode` with
+`ENABLE_VIRTUAL_TERMINAL_PROCESSING`, guarded by `OperatingSystem.IsWindows()`
+and tolerant of failure, since an older console losing colour is better than a
+crash. `DllImport` rather than `LibraryImport`: the source-generated form
+requires `AllowUnsafeBlocks` across the whole assembly, which three interop
+declarations do not justify.
+
+*Still outstanding, and recorded as such:* the client has not actually been run
+on Linux or Windows. N5 in `02-requirements.md` and the table in
+`07-operations.md` both say so rather than claiming coverage. Reasoning that
+code is portable is not the same as having run it, and the difference is exactly
+what this entry is about.
+
+**One observation worth keeping.** A test tried to express "pan from the centre
+of the universe to the seam" as a signed delta and would not compile: that
+distance exceeds `long`. It is not a real limitation — the universe wraps, so
+every destination is reachable by going the shorter way round, which always
+fits — but it is a good reminder that on a 2^64 torus the difference between two
+coordinates is not always a representable number. Recorded in
+`07-operations.md` under known limits; the client uses absolute `subscribe` for
+long jumps rather than computing a delta.
