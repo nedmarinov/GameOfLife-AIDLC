@@ -179,20 +179,22 @@ tools rather than being a bespoke blob.
 
 ```
 #N Gosper glider gun
-#O 9223372036854775800 9223372036854775804
-#G 0
+#C origin: 9223372036854775800 9223372036854775804
+#C generation: 0
 x = 36, y = 9, rule = B3/S23
 24bo$22bobo$12b2o6b2o12b2o$11bo3bo4b2o12b2o$2o8bo5bo3b2o$2o8bo3bob2o4b
 obo$10bo5bo7bo$11bo3bo$12b2o!
 ```
 
-`#O` (absolute `ulong` origin of the pattern's top-left) and `#G` (generation
-counter) are our extensions carried in **legal RLE comment lines**, so the file
-stays valid for third-party tools while round-tripping our universe state.
+Origin (absolute `ulong` top-left) and generation counter are our extensions,
+carried in **tagged `#C` comment lines** — free text in every RLE
+implementation — so the file stays valid for third-party tools while
+round-tripping our universe state. See ADR 0004 for why `#O`/`#G`/`#R` were
+rejected.
 
-Known limitation to document rather than over-engineer: a pattern straddling
-the 2^64 seam has an ambiguous bounding box on save. Not reachable in the
-demo; noted in the ADR.
+A pattern straddling the 2^64 seam has an ambiguous bounding box under naive
+min/max. Solved by taking the complement of the largest empty run on each axis,
+which is correct in both cases.
 
 ## 7. Repository layout
 

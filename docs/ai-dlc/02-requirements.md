@@ -13,8 +13,9 @@ An untestable requirement is a requirement nobody can prove was met.
 | F4 | A mostly-empty universe costs memory proportional to population | `Universe` stores only live cells; `PopulationTests` |
 | F5 | One server owns one simulation | single `Universe` instance owned by the sim loop |
 | F6 | Multiple clients observe generation updates concurrently | manual: 3 concurrent clients, Bolt 5 |
-| F7 | A client may edit the universe through a 100x100 viewport | manual + `ViewportTests` |
+| F7 | Any client may edit the universe through a 100x100 viewport **while paused** | manual + `ViewportTests` |
 | F8 | Edits by one client are visible to all others | manual: 3-client run, Bolt 5 |
+| F12 | Toggles sent while running are rejected with an explicit error, not silently dropped | `ServerPolicyTests`, Bolt 4 |
 | F9 | State can be stored to disk | `RleTests` round-trip |
 | F10 | State can be loaded from disk | `RleTests`; ships `patterns/gosper-glider-gun.rle` |
 | F11 | Simulation can be started, paused, single-stepped, cleared, and re-speeded | manual, Bolt 5 |

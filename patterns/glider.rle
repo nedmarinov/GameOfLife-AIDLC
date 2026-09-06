@@ -1,0 +1,9 @@
+#N Glider
+#C The smallest spaceship. Travels one cell diagonally every four generations,
+#C which makes it the clearest probe for the 2^64 seam: its displacement is
+#C exactly predictable, so an incorrect wrap shows as a wrong position rather
+#C than a plausible-looking mess.
+#C origin: 18446744073709551614 18446744073709551614
+#C generation: 0
+x = 3, y = 3, rule = B3/S23
+bo$2bo$3o!

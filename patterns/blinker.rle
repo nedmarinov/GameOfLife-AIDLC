@@ -1,0 +1,6 @@
+#N Blinker
+#C Period 2 oscillator. The smallest useful check that a load worked.
+#C origin: 9223372036854775808 9223372036854775808
+#C generation: 0
+x = 3, y = 1, rule = B3/S23
+3o!
