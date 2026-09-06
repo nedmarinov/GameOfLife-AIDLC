@@ -182,7 +182,8 @@ before anything touches the filesystem.
 
 This was built with AI agents, and the process is part of the deliverable.
 [docs/ai-dlc/](docs/ai-dlc/) holds the requirements, the decision records with
-their rejected alternatives, and
+their rejected alternatives, a
+[plan and execution record for every bolt](docs/ai-dlc/bolts/), and
 [an audit log](docs/ai-dlc/06-ai-audit-log.md) recording where AI output was
 **wrong and was rejected** — a file format tag that meant something else, a
 socket closed out from under its own writer, and two test oracles that were
