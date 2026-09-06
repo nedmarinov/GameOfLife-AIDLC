@@ -252,3 +252,45 @@ paths and symlink escapes together rather than blocklisting patterns. The
 boundary check compares against root-plus-separator, so a sibling directory
 whose name merely *starts with* the root (`/data-evil` against `/data`) is
 rejected too — the defect a naive `StartsWith` would have shipped.
+
+
+### Bolt 5 — Console client
+
+**Entry 5 — a wrong test oracle, again, and the same cause as entry 1.**
+
+*Symptom:* `Renders_A_Window_Straddling_The_Seam` failed asserting that a live
+cell painted the foreground colour. It painted the cursor colour instead.
+
+*What was wrong:* the test parked the cursor at `(0, 0)` "outside the window" so
+it could not tint anything. But the window under test starts at
+`ulong.MaxValue - 9` and wraps, so `(0, 0)` is **inside** it, at local
+`(10, 10)` — precisely the live cell being asserted. The renderer was correct;
+the test's mental model of the geometry was not.
+
+*Why it matters:* this is the second time a test oracle rather than the code was
+wrong, and both times the subject was seam geometry (see entry 1). The pattern
+is worth naming: on a torus, intuitions about "far away" and "outside" stop
+holding. `(0, 0)` reads as the opposite corner from `MaxValue` and is in fact
+adjacent to it. Every wrong oracle so far has come from reasoning about wrapped
+coordinates in the head instead of on the page.
+
+*Shipped instead:* the cursor moved to `(1_000, 1_000)`, genuinely outside, and
+the test now asserts both halves — background for the odd cell row, foreground
+for the even one — so it pins the half-block packing rather than merely
+detecting colour.
+
+*Guard:* `A_Cursor_Outside_The_Window_Tints_Nothing` uses a non-wrapping
+viewport, where "outside" means what it appears to mean.
+
+**Verified end to end, not just by unit test.** Two clients were run
+concurrently against one server with the gun seeded: both reported identical
+generations 0..206 and population climbing from 36 as gliders were emitted. A
+renderer that passes its own tests can still be wrong about what the server
+sends; two independent processes agreeing on 290 frames is a different kind of
+evidence.
+
+**One robustness fix found by the same exercise.** `Console.KeyAvailable`
+throws when stdin is redirected, which is exactly how the client runs under a
+script or a pipe. Rather than treat that as an error, the client now runs as a
+pure observer when there is no keyboard — which is what made the two-client
+verification above possible in the first place.

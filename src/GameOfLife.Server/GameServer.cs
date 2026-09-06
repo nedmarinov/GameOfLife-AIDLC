@@ -18,6 +18,8 @@ internal sealed class GameServer(PatternStore patterns, int port, int tickMillis
     public void Seed(IEnumerable<Cell> cells, ulong generation = 0) =>
         _simulation.Seed(cells, generation);
 
+    public void StartRunning() => _simulation.StartRunning();
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         var listener = new TcpListener(IPAddress.Loopback, port);

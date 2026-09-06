@@ -6,6 +6,7 @@ int port = ProtocolConstants.DefaultPort;
 int tick = ProtocolConstants.DefaultTickMilliseconds;
 string patternsRoot = FindPatternsDirectory();
 string? seedPattern = "gosper-glider-gun.rle";
+bool startRunning = false;
 
 for (int i = 0; i < args.Length; i++)
 {
@@ -31,6 +32,10 @@ for (int i = 0; i < args.Length; i++)
             seedPattern = null;
             break;
 
+        case "--run":
+            startRunning = true;
+            break;
+
         case "--help" or "-h":
             Console.WriteLine("""
                 Conway's Game of Life -- server
@@ -40,6 +45,8 @@ for (int i = 0; i < args.Length; i++)
                   --patterns <dir>  directory for load/save (default ./patterns)
                   --pattern <file>  seed pattern (default gosper-glider-gun.rle)
                   --empty           start with an empty universe
+                  --run             begin ticking immediately, without waiting
+                                    for a client to press start
                 """);
             return 0;
     }
@@ -64,6 +71,12 @@ if (seedPattern is not null)
         Console.Error.WriteLine($"Could not seed from '{seedPattern}': {error.Message}");
         return 1;
     }
+}
+
+if (startRunning)
+{
+    server.StartRunning();
+    Console.WriteLine("Simulation started.");
 }
 
 using var shutdown = new CancellationTokenSource();

@@ -68,6 +68,9 @@ internal sealed class SimulationHost
         _dirty = true;
     }
 
+    /// <summary>Starts ticking immediately, without waiting for a client to ask.</summary>
+    public void StartRunning() => _running = true;
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         var clock = new Stopwatch();
