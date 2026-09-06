@@ -414,3 +414,47 @@ server.
 The integration tests use `ClientWebSocket`, so the handshake and framing are
 exercised by an independent implementation of the RFC rather than by the one
 under test.
+
+
+### Bolt 8 — Zoom
+
+**Entry 7 — a stale frame that could never be corrected.**
+
+*Symptom:* a new integration test timed out waiting for a viewport frame after
+toggling a cell while paused.
+
+*What was wrong:* the tick loop broadcast only when a `_dirty` flag was set —
+on an edit, a load, a viewport change or a connection. That is a sound
+optimisation for an idle universe and it was wrong for a subtle reason. Egress
+queues drop the **oldest** frame when full, so a client that fell behind at the
+moment the simulation was paused would keep a stale frame **forever**: nothing
+would change, so nothing would ever be sent to correct it. The two mechanisms
+were individually reasonable — drop stale frames because a newer one is always
+coming; skip redundant broadcasts because nothing changed — and together they
+produced a state where the newer frame never came.
+
+*Why the test found it and review had not:* the interaction only exists when the
+simulation is paused *and* a client is behind. Every earlier test either ran the
+simulation or read fast enough. The failure was reported as a timeout, which
+looks like a slow test rather than a defect.
+
+*Shipped:* broadcast on change **or** at least once per second, whichever comes
+first. That bounds how long any client can display something wrong to one
+second, while an idle universe still costs a kilobyte a second per client.
+
+*Guard:* `Zooming_Out_Brings_The_Whole_Universe_Into_One_Window` exercises the
+paused path and would time out again if the floor were removed.
+
+**On the feature itself.** Zoom is a power of two so the cell-to-block mapping is
+a shift, not a division: exact, and no rounding can place a cell in the
+neighbouring block. There is deliberately no zoom *in* past 1:1 — a cell is the
+smallest thing there is, so magnifying would show no more information and only
+shrink the visible area, which is the opposite of what a 2^64 universe needs.
+The buttons are honest about this: zooming in clamps at 1:1.
+
+The overflow boundary is guarded rather than discovered:
+`Width << Zoom` wraps above zoom 57 for a 100-wide window, and a wrapped
+coverage value would make the containment test silently accept cells *outside*
+the window — which would look like random cells appearing at extreme zoom rather
+than like an arithmetic fault. `Viewport.MaxZoomFor` computes the limit from the
+width's bit length and the constructor refuses to exceed it.

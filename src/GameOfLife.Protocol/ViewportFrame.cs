@@ -27,7 +27,7 @@ namespace GameOfLife.Protocol;
 /// </remarks>
 public static class ViewportFrame
 {
-    public const int HeaderLength = (sizeof(ulong) * 3) + (sizeof(ushort) * 2);
+    public const int HeaderLength = (sizeof(ulong) * 3) + (sizeof(ushort) * 2) + (sizeof(byte) * 2);
 
     /// <summary>Total payload size for a viewport of the given dimensions.</summary>
     public static int PayloadLength(in Viewport viewport) => HeaderLength + viewport.BitmapByteCount;
@@ -73,6 +73,8 @@ public static class ViewportFrame
         BinaryPrimitives.WriteUInt64LittleEndian(destination[16..], viewport.OriginY);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[24..], (ushort)viewport.Width);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[26..], (ushort)viewport.Height);
+        destination[28] = (byte)viewport.Zoom;
+        destination[29] = 0;
     }
 
     /// <summary>Decodes a viewport frame payload.</summary>
@@ -87,11 +89,18 @@ public static class ViewportFrame
         ulong originY = BinaryPrimitives.ReadUInt64LittleEndian(payload[16..]);
         int width = BinaryPrimitives.ReadUInt16LittleEndian(payload[24..]);
         int height = BinaryPrimitives.ReadUInt16LittleEndian(payload[26..]);
+        int zoom = payload[28];
 
         if (width == 0 || height == 0)
             throw new ProtocolException($"Viewport frame declared an empty {width}x{height} window.");
 
-        var viewport = new Viewport(originX, originY, width, height);
+        if (zoom > Viewport.MaxZoomFor(width, height))
+        {
+            throw new ProtocolException(
+                $"Viewport frame declared zoom {zoom}, beyond the maximum for a {width}x{height} window.");
+        }
+
+        var viewport = new Viewport(originX, originY, width, height, zoom);
         int expected = viewport.BitmapByteCount;
 
         // The declared dimensions must agree with the bytes actually sent;

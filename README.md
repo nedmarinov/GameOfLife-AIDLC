@@ -27,6 +27,8 @@ space         toggle a cell (while paused)
 s             start / pause
 n             single step (while paused)
 + / -         faster / slower
+z / x         zoom out / in
+Z             zoom all the way out — the whole universe in one window
 c             clear
 o / w         load / save a pattern file
 g             jump back to the centre of the universe
@@ -41,7 +43,7 @@ background the lower.
 
 Served by the server itself at <http://localhost:5151> — no build step, no
 bundler, one static file. Click to toggle cells while paused, drag to paint,
-arrow keys to pan.
+arrow keys to pan, scroll wheel to zoom.
 
 It speaks **the same protocol as the terminal client**, byte for byte: the
 length-prefixed frames simply travel inside WebSocket messages instead of
@@ -77,7 +79,7 @@ crosses `ulong.MaxValue` and arrives at the far side within four generations.
 dotnet test
 ```
 
-171 tests. The ones worth reading are in
+189 tests. The ones worth reading are in
 [TorusTests.cs](tests/GameOfLife.Core.Tests/TorusTests.cs) — a glider crossing
 the `ulong.MaxValue` seam in both dimensions, and one wrapping in a single
 dimension, which is where a hand-written modulo implementation typically breaks.
@@ -114,6 +116,14 @@ seam special case anywhere in the code.
 Deciding whether a cell is visible is one wrapping subtraction and one unsigned
 comparison, which is why a window straddling the seam needs no special handling.
 
+**Zoom is a power of two**, so mapping a cell to its displayed block is a shift
+rather than a division — exact, with no rounding that could put a cell in the
+wrong block. At maximum zoom each displayed cell stands for 2^57 universe cells
+and the entire 2^64 × 2^64 universe fits in the window, which is the only direct
+way to see that it really is that large. Rendering needs no special case for it:
+the renderer walks live cells rather than the window, so several cells landing on
+one bit simply set it twice.
+
 **One thread owns the universe.** Connections post commands to a single channel
 and that thread drains them between ticks, so mutual exclusion is structural —
 there is no lock to forget to take. Each client has a two-frame outbound queue
@@ -124,7 +134,7 @@ client joining mid-run become consistent with no replay logic.
 
 **Transport is raw TCP** with a length-prefixed binary framing protocol on
 `System.IO.Pipelines`. Control messages are JSON, so the wire is readable with
-`tcpdump` and no decoder; the per-generation frame is a fixed 1,278 bytes for a
+`tcpdump` and no decoder; the per-generation frame is a fixed 1,280 bytes for a
 100x100 window whatever the population. Browsers get the identical frames
 inside WebSocket messages: the RFC 6455 handshake is done by hand, the framing
 is left to the runtime, and a connection is the same object to the server

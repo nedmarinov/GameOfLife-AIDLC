@@ -20,6 +20,8 @@ An untestable requirement is a requirement nobody can prove was met.
 | F10 | State can be loaded from disk | `RleTests`; ships `patterns/gosper-glider-gun.rle` |
 | F11 | Simulation can be started, paused, single-stepped, cleared, and re-speeded | `Editing_Is_Accepted_Again_After_Pausing`; client key handling |
 
+| F13 | The window can zoom out until the whole 2^64 x 2^64 universe is visible | `ZoomTests`; `Zooming_Out_Brings_The_Whole_Universe_Into_One_Window` |
+
 ## Non-functional
 
 | ID | Requirement | Verified by |
@@ -34,6 +36,7 @@ An untestable requirement is a requirement nobody can prove was met.
 
 | N8 | A hostile peer cannot make the server buffer without bound | `FramingTests.Rejects_An_Absurd_Declared_Length_Without_Buffering_It` |
 | N9 | A client cannot read or write files outside the pattern directory | `PatternStoreTests`; `Loading_Outside_The_Pattern_Directory_Is_Refused` |
+| N10 | No client can display stale state indefinitely | one-second broadcast floor; `Zooming_Out_Brings_The_Whole_Universe_Into_One_Window` |
 
 ## Constraint that shapes everything
 

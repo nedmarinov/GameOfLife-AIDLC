@@ -133,7 +133,11 @@ public sealed class Universe
     /// <remarks>
     /// Fixed size regardless of population: a 100x100 window is always 1250
     /// bytes. Cost is O(population) because the live set is scanned and tested
-    /// for visibility. For the mostly-empty universe in the brief that is the
+    /// for visibility — which is also why zoom needs no special handling here.
+    /// At any zoom a displayed cell stands for a block, several live cells can
+    /// map to the same bit, and setting a bit that is already set is a no-op.
+    /// A renderer that iterated the <em>window</em> instead would have to
+    /// search each block. For the mostly-empty universe in the brief that is the
     /// cheaper direction; a universe dense enough to invert that tradeoff would
     /// want a spatial index, which ADR 0001 records as deferred.
     /// </remarks>

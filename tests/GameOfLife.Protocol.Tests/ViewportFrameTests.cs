@@ -16,7 +16,7 @@ public class ViewportFrameTests
     }
 
     [Fact]
-    public void A_Hundred_Square_Frame_Is_1278_Bytes_Whatever_The_Population()
+    public void A_Hundred_Square_Frame_Is_1280_Bytes_Whatever_The_Population()
     {
         var viewport = new Viewport(0, 0, Ui, Ui);
 
@@ -28,8 +28,8 @@ public class ViewportFrameTests
         byte[] emptyFrame = Encode(empty, viewport, 0);
         byte[] crowdedFrame = Encode(crowded, viewport, 0);
 
-        // 28-byte header + 1250-byte bitmap.
-        Assert.Equal(1_278, emptyFrame.Length);
+        // 30-byte header + 1250-byte bitmap.
+        Assert.Equal(1_280, emptyFrame.Length);
         Assert.Equal(emptyFrame.Length, crowdedFrame.Length);
     }
 

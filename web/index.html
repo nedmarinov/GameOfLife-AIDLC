@@ -51,7 +51,10 @@
   <button id="clear">clear</button>
   <button id="faster">faster</button>
   <button id="slower">slower</button>
-  <button id="centre">centre</button>
+  <button id="zoomout">zoom out −</button>
+  <button id="zoomin">zoom in +</button>
+  <button id="whole">whole universe</button>
+  <button id="centre">centre 1:1</button>
   <button id="gun">load gun</button>
   <button id="glider">load seam glider</button>
 </div>
@@ -60,6 +63,7 @@
   <span>gen <b id="gen">0</b></span>
   <span>pop <b id="pop">0</b></span>
   <span>tick <b id="tick">—</b></span>
+  <span>zoom <b id="zoom">1:1</b></span>
   <span>origin <b id="origin">—</b></span>
   <span><b id="link">connecting…</b></span>
 </div>
@@ -67,9 +71,11 @@
 <div id="notice"></div>
 
 <p class="hint">
-  Click a cell to toggle it while paused. Drag to paint. Arrow keys pan the
-  window. Everything you do here happens on the server, so every other client —
-  browser or terminal — sees it too.
+  Click a cell to toggle it while paused. Drag to paint. Arrow keys pan, the
+  scroll wheel zooms. Everything you do here happens on the server, so every
+  other client — browser or terminal — sees it too. Zoom all the way out and each
+  pixel stands for over a hundred million billion cells: that is what a
+  2<sup>64</sup> × 2<sup>64</sup> universe actually looks like.
 </p>
 
 <script>
@@ -88,7 +94,9 @@
   const image = ctx.createImageData(SIZE, SIZE);
 
   const el = id => document.getElementById(id);
-  const state = { origin: [0n, 0n], running: false, tick: 100, painting: false, painted: null };
+  const state = {
+    origin: [0n, 0n], zoom: 0, running: false, tick: 100, painting: false, painted: null,
+  };
 
   let socket = null, retry = 250;
 
@@ -107,7 +115,8 @@
       // The server remembers nothing about a client that went away, so a
       // reconnect restates the window it wants.
       send({ op: "subscribe", originX: state.origin[0].toString(),
-             originY: state.origin[1].toString(), width: SIZE, height: SIZE });
+             originY: state.origin[1].toString(), width: SIZE, height: SIZE,
+             zoom: state.zoom });
     };
 
     socket.onmessage = e => onFrame(new Uint8Array(e.data));
@@ -167,10 +176,14 @@
     state.origin = [readU64(view, 8), readU64(view, 16)];
     const width = view.getUint16(24, true);
     const height = view.getUint16(26, true);
-    const bitmap = payload.subarray(28);
+    state.zoom = payload[28];
+    const bitmap = payload.subarray(30);
 
     el("gen").textContent = generation.toString();
     el("origin").textContent = `${state.origin[0]}, ${state.origin[1]}`;
+    el("zoom").textContent = state.zoom === 0
+      ? "1:1"
+      : `${state.zoom} (${(1n << BigInt(state.zoom)).toLocaleString()} cells/px)`;
 
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
@@ -202,11 +215,14 @@
 
     if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) return null;
 
-    // Wrap with BigInt.asUintN so a window straddling the seam addresses the
-    // same cells the server does.
+    // Scale by the zoom and wrap with BigInt.asUintN, so a click addresses the
+    // same cell the server would -- the top-left of the block, at any zoom, and
+    // correct for a window straddling the seam.
+    const scale = BigInt(state.zoom);
+
     return [
-      BigInt.asUintN(64, state.origin[0] + BigInt(x)),
-      BigInt.asUintN(64, state.origin[1] + BigInt(y)),
+      BigInt.asUintN(64, state.origin[0] + (BigInt(x) << scale)),
+      BigInt.asUintN(64, state.origin[1] + (BigInt(y) << scale)),
     ];
   }
 
@@ -240,10 +256,21 @@
   el("gun").onclick = () => send({ op: "load", file: "gosper-glider-gun.rle" });
   el("glider").onclick = () => send({ op: "load", file: "glider.rle" });
 
+  const zoom = delta => send({ op: "zoom", delta });
+
+  el("zoomout").onclick = () => zoom(1);
+  el("zoomin").onclick = () => zoom(-1);
+  el("whole").onclick = () => zoom(99);      // the server clamps to its maximum
+
   el("centre").onclick = () => {
     const centre = (1n << 63n).toString();
-    send({ op: "subscribe", originX: centre, originY: centre, width: SIZE, height: SIZE });
+    send({ op: "subscribe", originX: centre, originY: centre, width: SIZE, height: SIZE, zoom: 0 });
   };
+
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    zoom(e.deltaY > 0 ? 1 : -1);
+  }, { passive: false });
 
   addEventListener("keydown", e => {
     const step = e.shiftKey ? SIZE / 2 : 1;
@@ -258,6 +285,10 @@
     } else if (e.key === " ") {
       e.preventDefault();
       control(state.running ? "pause" : "start");
+    } else if (e.key === "-" || e.key === "_") {
+      zoom(1);
+    } else if (e.key === "+" || e.key === "=") {
+      zoom(-1);
     }
   });
 

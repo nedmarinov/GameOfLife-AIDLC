@@ -35,7 +35,9 @@ for (int i = 0; i < args.Length; i++)
                   + / -       faster / slower
                   c           clear the universe
                   o / w       load / save a pattern file
-                  g           jump back to the centre of the universe
+                  z / x       zoom out / in
+                  Z           zoom all the way out (whole universe)
+                  g           jump back to the centre of the universe, 1:1
                   q           quit
                 """);
             return 0;
@@ -71,6 +73,7 @@ link.Connected += () => link.SendAsync(new SubscribeMessage
     OriginY = viewport.OriginY,
     Width = viewport.Width,
     Height = viewport.Height,
+    Zoom = viewport.Zoom,
 }, shutdown.Token);
 
 Screen.Enter();
@@ -137,6 +140,15 @@ void Consume(Inbound frame)
         case FrameType.Viewport:
             (Viewport window, ulong gen, byte[] bits) = ViewportFrame.Read(frame.Payload);
 
+            // If the zoom or origin changed under us -- a zoom recentres the
+            // window -- re-derive the cursor from its displayed position, so it
+            // stays where the user is looking and keeps addressing a cell the
+            // server would actually edit.
+            if (window.Zoom != viewport.Zoom || !window.TryLocate(cursor, out _, out _))
+                cursor = window.CellAt(window.Width / 2, window.Height / 2);
+            else if (window.TryLocate(cursor, out int cx, out int cy))
+                cursor = window.CellAt(cx, cy);
+
             // The server is authoritative about the window: if a pan has not
             // round-tripped yet, its answer wins over our optimistic guess.
             viewport = window;
@@ -202,8 +214,20 @@ async Task<bool> HandleKeyAsync(ConsoleKeyInfo key)
             await link.SendAsync(new ControlMessage { Action = ControlAction.Clear }, shutdown.Token);
             break;
 
+        case ConsoleKey.Z when shift:
+            await link.SendAsync(new ZoomMessage { Delta = 99 }, shutdown.Token);
+            break;
+
+        case ConsoleKey.Z:
+            await link.SendAsync(new ZoomMessage { Delta = 1 }, shutdown.Token);
+            break;
+
+        case ConsoleKey.X:
+            await link.SendAsync(new ZoomMessage { Delta = -1 }, shutdown.Token);
+            break;
+
         case ConsoleKey.G:
-            viewport = viewport with { OriginX = 1UL << 63, OriginY = 1UL << 63 };
+            viewport = new Viewport(1UL << 63, 1UL << 63, Size, Size);
             cursor = viewport.CellAt(Size / 2, Size / 2);
             await SubscribeAsync();
             break;
@@ -276,6 +300,7 @@ Task SubscribeAsync() => link.SendAsync(new SubscribeMessage
     OriginY = viewport.OriginY,
     Width = viewport.Width,
     Height = viewport.Height,
+    Zoom = viewport.Zoom,
 }, shutdown.Token);
 
 async Task HandlePromptKeyAsync(ConsoleKeyInfo key)
@@ -321,10 +346,13 @@ void Draw()
         $"\e[1mtick\e[0m {tickMilliseconds}ms   " +
         $"\e[1mcursor\e[0m ({cursor.X}, {cursor.Y})   " +
         $"\e[1morigin\e[0m ({viewport.OriginX}, {viewport.OriginY})   " +
+        $"\e[1mzoom\e[0m {viewport.Zoom}" +
+        (viewport.Zoom > 0 ? $" ({viewport.Scale} cells/px)" : " (1:1)") + "   " +
         connection;
 
     string help = notice
-        ?? "arrows move  shift+arrows pan  space toggle  s start/pause  n step  +/- speed  c clear  o load  w save  g centre  q quit";
+        ?? "arrows move  shift+arrows pan  z/x zoom out/in  Z whole universe  space toggle  "
+         + "s start/pause  n step  +/- speed  c clear  o load  w save  g centre  q quit";
 
     screen.Draw(viewport, bitmap, cursor, status, help, prompt is null ? null : prompt + promptText);
 }

@@ -30,6 +30,9 @@ internal sealed class SimulationHost
     /// </remarks>
     private const int MaxCommandsPerTick = 512;
 
+    /// <summary>Longest a client may hold an uncorrected frame, in milliseconds.</summary>
+    private const int RefreshMilliseconds = 1_000;
+
     private readonly Universe _universe = new();
     private readonly List<ClientConnection> _clients = [];
     private readonly Channel<Command> _commands;
@@ -38,6 +41,7 @@ internal sealed class SimulationHost
     private bool _running;
     private int _tickMilliseconds;
     private bool _dirty = true;
+    private int _ticksSinceBroadcast;
 
     public SimulationHost(PatternStore patterns, int tickMilliseconds = ProtocolConstants.DefaultTickMilliseconds)
     {
@@ -54,6 +58,9 @@ internal sealed class SimulationHost
     }
 
     public ChannelWriter<Command> Commands => _commands.Writer;
+
+    /// <summary>Ticks between unconditional broadcasts, at the current speed.</summary>
+    private int RefreshTicks => Math.Max(1, RefreshMilliseconds / Math.Max(1, _tickMilliseconds));
 
     public ulong Generation => _universe.Generation;
 
@@ -87,10 +94,22 @@ internal sealed class SimulationHost
                 _dirty = true;
             }
 
-            if (_dirty)
+            // Broadcast on change, and at least once a second regardless.
+            //
+            // The periodic refresh is not cosmetic. Egress queues drop the
+            // oldest frame when full, so a client that falls behind at the
+            // moment the simulation is paused would otherwise hold a stale
+            // frame forever -- nothing would change, so nothing would correct
+            // it. A floor on broadcast rate bounds how long any client can be
+            // wrong to one second, while an idle universe still costs almost
+            // nothing.
+            _ticksSinceBroadcast++;
+
+            if (_dirty || _ticksSinceBroadcast >= RefreshTicks)
             {
                 Broadcast();
                 _dirty = false;
+                _ticksSinceBroadcast = 0;
             }
 
             // Subtract the work already done so the tick rate is the period,
@@ -147,6 +166,13 @@ internal sealed class SimulationHost
 
             case PanViewport(var client, long dx, long dy):
                 client.Viewport = client.Viewport.Pan(dx, dy);
+                _dirty = true;
+                break;
+
+            case ZoomViewport(var client, int delta):
+                // ZoomBy clamps, so a client can send a large delta to reach
+                // either extreme without knowing the limit.
+                client.Viewport = client.Viewport.ZoomBy(delta);
                 _dirty = true;
                 break;
 

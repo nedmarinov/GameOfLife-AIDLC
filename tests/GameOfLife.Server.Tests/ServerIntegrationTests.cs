@@ -185,6 +185,75 @@ public class ServerIntegrationTests : IAsyncLifetime
         Assert.Equal(before.OriginX, still.OriginX);
     }
 
+    /// <summary>
+    /// Zooming out far enough to see the whole universe at once.
+    /// </summary>
+    /// <remarks>
+    /// Two cells are placed a quarter of the universe apart — a distance no
+    /// 100x100 window at 1:1 could ever show both ends of. At maximum zoom both
+    /// appear in the same frame, which is the only direct demonstration that the
+    /// universe really is 2^64 across rather than merely declared to be.
+    /// </remarks>
+    [Fact]
+    public async Task Zooming_Out_Brings_The_Whole_Universe_Into_One_Window()
+    {
+        await using TestClient client = await ConnectAsync();
+        await client.ReadMessageAsync<HelloMessage>();
+
+        var near = new Cell(0, 0);
+        var far = new Cell(ulong.MaxValue / 4, ulong.MaxValue / 4);
+
+        await client.SendAsync(new SubscribeMessage { OriginX = 0, OriginY = 0, Width = 100, Height = 100 });
+        await client.SendAsync(new ToggleMessage { X = near.X, Y = near.Y });
+        await client.ReadUntilCellAliveAsync(near);
+
+        // At 1:1 the far cell is unreachable from this window.
+        (Viewport close, _, _) = await client.ReadFrameAsync();
+        Assert.Equal(0, close.Zoom);
+        Assert.False(close.TryLocate(far, out _, out _));
+
+        await client.SendAsync(new SubscribeMessage
+        {
+            OriginX = far.X, OriginY = far.Y, Width = 100, Height = 100,
+        });
+        await client.SendAsync(new ToggleMessage { X = far.X, Y = far.Y });
+        await client.ReadUntilCellAliveAsync(far);
+
+        // Now zoom out as far as the window allows.
+        await client.SendAsync(new SubscribeMessage { OriginX = 0, OriginY = 0, Width = 100, Height = 100 });
+        await client.SendAsync(new ZoomMessage { Delta = 99 });
+
+        (Viewport wide, _, byte[] bitmap) = await client.ReadUntilViewportAsync(v => v.Zoom > 0);
+
+        Assert.Equal(Viewport.MaxZoomFor(100, 100), wide.Zoom);
+        Assert.True(wide.CoverageWidth > ulong.MaxValue / 2);
+
+        // Both cells, a quarter of the universe apart, in the same frame.
+        Assert.True(wide.TryLocate(near, out int nx, out int ny));
+        Assert.True(wide.TryLocate(far, out int fx, out int fy));
+        Assert.True(Viewport.IsSet(bitmap, wide.BitIndex(nx, ny)), "near cell missing at full zoom");
+        Assert.True(Viewport.IsSet(bitmap, wide.BitIndex(fx, fy)), "far cell missing at full zoom");
+        Assert.NotEqual((nx, ny), (fx, fy));
+    }
+
+    [Fact]
+    public async Task Zoom_Is_Per_Client_Like_The_Viewport()
+    {
+        await using TestClient zoomed = await ConnectAsync();
+        await using TestClient close = await ConnectAsync();
+
+        await zoomed.ReadMessageAsync<HelloMessage>();
+        await close.ReadMessageAsync<HelloMessage>();
+
+        await zoomed.SendAsync(new ZoomMessage { Delta = 10 });
+
+        (Viewport wide, _, _) = await zoomed.ReadUntilViewportAsync(v => v.Zoom == 10);
+        Assert.Equal(10, wide.Zoom);
+
+        (Viewport unchanged, _, _) = await close.ReadFrameAsync();
+        Assert.Equal(0, unchanged.Zoom);
+    }
+
     [Fact]
     public async Task A_Malformed_Frame_Is_Answered_Then_The_Connection_Ends()
     {

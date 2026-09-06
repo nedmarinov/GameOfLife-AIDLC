@@ -94,7 +94,7 @@ extensible. The per-generation frame is binary because it is the hot path.
 ### 3.2 The viewport frame is a fixed-size bitmap
 
 A 100x100 viewport is 10,000 cells = **1,250 bytes**, one bit per cell, plus a
-small header (generation, origin X/Y, width, height). Constant size regardless
+30-byte header (generation, origin X/Y, width, height, zoom). Constant size regardless
 of population, no per-cell allocation, no serializer.
 
 The obvious alternative — a JSON array of live coordinates — is larger for any

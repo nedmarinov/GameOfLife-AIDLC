@@ -222,13 +222,11 @@ internal sealed class ClientConnection : IAsyncDisposable
     /// <summary>Maps a wire message onto a simulation command.</summary>
     private Command? Translate(ProtocolMessage message) => message switch
     {
-        SubscribeMessage m => new SetViewport(this,
-            new Viewport(m.OriginX, m.OriginY,
-                Math.Clamp(m.Width, 1, ProtocolConstants.DefaultViewportSize),
-                Math.Clamp(m.Height, 1, ProtocolConstants.DefaultViewportSize))),
+        SubscribeMessage m => new SetViewport(this, BuildViewport(m)),
 
         ToggleMessage m => new ToggleCell(this, new Cell(m.X, m.Y)),
         PanMessage m => new PanViewport(this, m.Dx, m.Dy),
+        ZoomMessage m => new ZoomViewport(this, m.Delta),
         ControlMessage m => new Control(this, m.Action, m.Value),
         LoadMessage m => new LoadPattern(this, m.File),
         SaveMessage m => new SavePattern(this, m.File),
@@ -244,6 +242,24 @@ internal sealed class ClientConnection : IAsyncDisposable
     /// <remarks>
     /// The graceful half of shutdown. <see cref="Close"/> is the abrupt half.
     /// </remarks>
+    /// <summary>
+    /// Builds a viewport from a subscribe request, clamped to what is legal.
+    /// </summary>
+    /// <remarks>
+    /// Dimensions and zoom both arrive from a network peer. Clamping rather
+    /// than rejecting keeps an over-eager client working instead of
+    /// disconnecting it, while the <see cref="Viewport"/> constructor's own
+    /// guard means an out-of-range zoom can never reach the renderer.
+    /// </remarks>
+    private static Viewport BuildViewport(SubscribeMessage message)
+    {
+        int width = Math.Clamp(message.Width, 1, ProtocolConstants.DefaultViewportSize);
+        int height = Math.Clamp(message.Height, 1, ProtocolConstants.DefaultViewportSize);
+        int zoom = Math.Clamp(message.Zoom, 0, Viewport.MaxZoomFor(width, height));
+
+        return new Viewport(message.OriginX, message.OriginY, width, height, zoom);
+    }
+
     public void CompleteOutbound() => _egress.Writer.TryComplete();
 
     /// <summary>Abandons the connection without waiting for queued frames.</summary>

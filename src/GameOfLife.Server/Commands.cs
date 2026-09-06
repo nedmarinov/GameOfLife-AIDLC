@@ -23,6 +23,8 @@ internal sealed record SetViewport(ClientConnection Client, Viewport Viewport) :
 
 internal sealed record PanViewport(ClientConnection Client, long Dx, long Dy) : Command;
 
+internal sealed record ZoomViewport(ClientConnection Client, int Delta) : Command;
+
 internal sealed record ToggleCell(ClientConnection Client, Cell Cell) : Command;
 
 internal sealed record Control(ClientConnection Client, ControlAction Action, int Value) : Command;

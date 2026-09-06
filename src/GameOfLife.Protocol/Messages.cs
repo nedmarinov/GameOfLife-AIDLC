@@ -16,6 +16,7 @@ namespace GameOfLife.Protocol;
 [JsonDerivedType(typeof(SubscribeMessage), "subscribe")]
 [JsonDerivedType(typeof(ToggleMessage), "toggle")]
 [JsonDerivedType(typeof(PanMessage), "pan")]
+[JsonDerivedType(typeof(ZoomMessage), "zoom")]
 [JsonDerivedType(typeof(ControlMessage), "control")]
 [JsonDerivedType(typeof(LoadMessage), "load")]
 [JsonDerivedType(typeof(SaveMessage), "save")]
@@ -38,6 +39,22 @@ public sealed record SubscribeMessage : ProtocolMessage
     public int Width { get; init; } = 100;
 
     public int Height { get; init; } = 100;
+
+    /// <summary>Universe cells per displayed cell, as a power of two. 0 is 1:1.</summary>
+    public int Zoom { get; init; }
+}
+
+/// <summary>
+/// Changes how much of the universe the window covers, keeping its centre fixed.
+/// </summary>
+/// <remarks>
+/// Positive zooms out, negative zooms in. The server clamps to the range the
+/// window can express, so a client may send a large delta to jump straight to
+/// either extreme without knowing the limit.
+/// </remarks>
+public sealed record ZoomMessage : ProtocolMessage
+{
+    public int Delta { get; init; }
 }
 
 /// <summary>Flips one cell. Absolute coordinates, so it is viewport-independent.</summary>
@@ -145,7 +162,7 @@ public enum ErrorCode
 public static class ProtocolConstants
 {
     /// <summary>Bumped whenever a change would confuse an older peer.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     public const int DefaultPort = 5150;
 
