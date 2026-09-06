@@ -64,6 +64,38 @@ public sealed class PatternStore
         return Rle.ParseFile(path);
     }
 
+    /// <summary>
+    /// Lists the RLE files under the root, newest-looking name first.
+    /// </summary>
+    /// <remarks>
+    /// A file that fails to parse is listed with its error rather than omitted.
+    /// Silently hiding it would leave a user staring at a directory they know
+    /// has a file in it and a client that claims otherwise.
+    /// </remarks>
+    public IReadOnlyList<(string File, RlePattern? Pattern, string? Error)> List()
+    {
+        if (!Directory.Exists(_root)) return [];
+
+        var entries = new List<(string, RlePattern?, string?)>();
+
+        foreach (string path in Directory.EnumerateFiles(_root, "*.rle", SearchOption.AllDirectories)
+                     .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        {
+            string relative = Path.GetRelativePath(_root, path).Replace(Path.DirectorySeparatorChar, '/');
+
+            try
+            {
+                entries.Add((relative, Rle.ParseFile(path), null));
+            }
+            catch (Exception error) when (error is FormatException or NotSupportedException or IOException)
+            {
+                entries.Add((relative, null, error.Message));
+            }
+        }
+
+        return entries;
+    }
+
     public void Save(Universe universe, string requested, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(universe);

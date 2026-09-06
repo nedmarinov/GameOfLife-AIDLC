@@ -18,6 +18,8 @@ namespace GameOfLife.Protocol;
 [JsonDerivedType(typeof(PanMessage), "pan")]
 [JsonDerivedType(typeof(ZoomMessage), "zoom")]
 [JsonDerivedType(typeof(ControlMessage), "control")]
+[JsonDerivedType(typeof(ListMessage), "list")]
+[JsonDerivedType(typeof(CatalogueMessage), "catalogue")]
 [JsonDerivedType(typeof(LoadMessage), "load")]
 [JsonDerivedType(typeof(SaveMessage), "save")]
 [JsonDerivedType(typeof(HelloMessage), "hello")]
@@ -91,6 +93,39 @@ public sealed record ControlMessage : ProtocolMessage
 
     /// <summary>Tick interval in milliseconds. Only read for <see cref="ControlAction.Speed"/>.</summary>
     public int Value { get; init; }
+}
+
+/// <summary>Asks what patterns the server has.</summary>
+/// <remarks>
+/// Without this a client can only load a file whose name the user already
+/// knows, which makes every pattern beyond the two or three anyone remembers
+/// effectively invisible.
+/// </remarks>
+public sealed record ListMessage : ProtocolMessage;
+
+/// <summary>One entry in the server's pattern directory.</summary>
+public sealed record PatternEntry
+{
+    public required string File { get; init; }
+
+    /// <summary>The <c>#N</c> name, when the file has one.</summary>
+    public string? Name { get; init; }
+
+    /// <summary>Live cells in the pattern, or null if it could not be read.</summary>
+    public int? Population { get; init; }
+
+    public int? Width { get; init; }
+
+    public int? Height { get; init; }
+
+    /// <summary>Why the file could not be read, when it could not.</summary>
+    public string? Error { get; init; }
+}
+
+/// <summary>The answer to <see cref="ListMessage"/>.</summary>
+public sealed record CatalogueMessage : ProtocolMessage
+{
+    public required IReadOnlyList<PatternEntry> Patterns { get; init; }
 }
 
 public sealed record LoadMessage : ProtocolMessage

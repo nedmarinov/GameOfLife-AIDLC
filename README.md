@@ -30,7 +30,7 @@ n             single step (while paused)
 z / x         zoom out / in
 Z             zoom all the way out — the whole universe in one window
 c             clear
-o / w         load / save a pattern file
+o / w         load / save a pattern (o lists what the server has)
 g             jump back to the centre of the universe
 q             quit
 ```
@@ -79,7 +79,7 @@ crosses `ulong.MaxValue` and arrives at the far side within four generations.
 dotnet test
 ```
 
-189 tests. The ones worth reading are in
+192 tests. The ones worth reading are in
 [TorusTests.cs](tests/GameOfLife.Core.Tests/TorusTests.cs) — a glider crossing
 the `ulong.MaxValue` seam in both dimensions, and one wrapping in a single
 dimension, which is where a hand-written modulo implementation typically breaks.
@@ -151,6 +151,38 @@ web/index.html                  browser client, served by the server
 patterns/                       Gosper glider gun and friends, in standard RLE
 docs/                           design decisions, and how this was built
 ```
+
+## Loading patterns
+
+Eleven ship in [`patterns/`](patterns/): the Gosper glider gun, a glider placed
+to cross the 2^64 seam, the three standard spaceships, the pulsar and
+pentadecathlon oscillators, and three methuselahs — the R-pentomino (1,103
+generations from five cells), the acorn (5,206 from seven), and the diehard,
+which vanishes completely on generation 130.
+
+Press `o` in the terminal or use the dropdown in the browser; both ask the
+server what it has, so there is nothing to memorise.
+
+### Adding your own
+
+Drop any standard RLE file into `patterns/` and it appears in the list. Good
+sources:
+
+- **[LifeWiki Pattern Archive](https://conwaylife.com/golly.html)** — the
+  canonical collection, browsable by name or category, with a zip of the lot.
+- **Individual [LifeWiki](https://conwaylife.com/wiki/LifeWiki:Pattern_pages)
+  pattern pages** — each has a "download RLE" link under the image.
+- **[Golly](https://golly.sourceforge.io/)** ships a large pattern library and
+  can fetch more from the same archives.
+- **[awesome-game-of-life](https://github.com/AlephAlpha/awesome-game-of-life)**
+  — a curated index of collections and tools.
+
+Two things to know. Files must use Conway's rule: anything else — HighLife
+`B36/S23`, Day & Night, Seeds — is **refused rather than quietly simulated under
+the wrong rule**, so a rejected file is a correct answer, not a bug. And a
+pattern with no `#CXRLE Pos=` loads at universe coordinate zero rather than the
+centre, which is a long way from where the shipped patterns sit; press `o` and
+load it, and the window follows it there.
 
 ## Files
 

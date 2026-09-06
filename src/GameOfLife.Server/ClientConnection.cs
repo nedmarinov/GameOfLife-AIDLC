@@ -228,6 +228,7 @@ internal sealed class ClientConnection : IAsyncDisposable
         PanMessage m => new PanViewport(this, m.Dx, m.Dy),
         ZoomMessage m => new ZoomViewport(this, m.Delta),
         ControlMessage m => new Control(this, m.Action, m.Value),
+        ListMessage => new ListPatterns(this),
         LoadMessage m => new LoadPattern(this, m.File),
         SaveMessage m => new SavePattern(this, m.File),
 

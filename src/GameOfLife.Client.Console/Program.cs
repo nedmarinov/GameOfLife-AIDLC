@@ -34,7 +34,7 @@ for (int i = 0; i < args.Length; i++)
                   n           single step (paused only)
                   + / -       faster / slower
                   c           clear the universe
-                  o / w       load / save a pattern file
+                  o / w       load / save a pattern file (o lists what exists)
                   z / x       zoom out / in
                   Z           zoom all the way out (whole universe)
                   g           jump back to the centre of the universe, 1:1
@@ -59,6 +59,7 @@ int tickMilliseconds = ProtocolConstants.DefaultTickMilliseconds;
 string? notice = Screen.SizeWarning(viewport);
 string? prompt = null;
 StringBuilder promptText = new();
+IReadOnlyList<PatternEntry> catalogue = [];
 
 using var shutdown = new CancellationTokenSource();
 
@@ -174,6 +175,10 @@ void Consume(Inbound frame)
                     tickMilliseconds = status.TickMilliseconds;
                     break;
 
+                case CatalogueMessage message:
+                    catalogue = message.Patterns;
+                    break;
+
                 case ErrorMessage error:
                     notice = error.Message;
                     break;
@@ -233,6 +238,9 @@ async Task<bool> HandleKeyAsync(ConsoleKeyInfo key)
             break;
 
         case ConsoleKey.O:
+            // Ask what exists, so the prompt can show it rather than expecting
+            // the user to already know a filename.
+            await link.SendAsync(new ListMessage(), shutdown.Token);
             prompt = "load: ";
             promptText.Clear();
             break;
@@ -354,7 +362,29 @@ void Draw()
         ?? "arrows move  shift+arrows pan  z/x zoom out/in  Z whole universe  space toggle  "
          + "s start/pause  n step  +/- speed  c clear  o load  w save  g centre  q quit";
 
-    screen.Draw(viewport, bitmap, cursor, status, help, prompt is null ? null : prompt + promptText);
+    string? promptLine = null;
+
+    if (prompt is not null)
+    {
+        promptLine = prompt + promptText;
+
+        // Offer what is available, narrowed as the user types. Loading is
+        // useless if you cannot discover what there is to load.
+        if (prompt.StartsWith("load", StringComparison.Ordinal) && catalogue.Count > 0)
+        {
+            string typed = promptText.ToString();
+
+            IEnumerable<string> matches = catalogue
+                .Where(entry => entry.File.Contains(typed, StringComparison.OrdinalIgnoreCase))
+                .Select(entry => entry.Name is null ? entry.File : $"{entry.File} ({entry.Name})")
+                .Take(4);
+
+            string offered = string.Join("   ", matches);
+            if (offered.Length > 0) promptLine += "      " + offered;
+        }
+    }
+
+    screen.Draw(viewport, bitmap, cursor, status, help, promptLine);
 }
 
 async Task ReadKeysAsync(CancellationToken cancellationToken)

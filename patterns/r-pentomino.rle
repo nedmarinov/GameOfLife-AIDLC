@@ -1,0 +1,7 @@
+#N R-pentomino
+#C Five cells that run for 1,103 generations before settling with 116 alive.
+#C The classic demonstration that tiny inputs need not be dull. Zoom out to
+#C watch the six escaping gliders leave.
+#CXRLE Pos=9223372036854775807,9223372036854775807
+x = 3, y = 3, rule = B3/S23
+b2o$2o$bo!

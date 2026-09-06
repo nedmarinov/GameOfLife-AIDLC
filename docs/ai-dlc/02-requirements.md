@@ -21,6 +21,7 @@ An untestable requirement is a requirement nobody can prove was met.
 | F11 | Simulation can be started, paused, single-stepped, cleared, and re-speeded | `Editing_Is_Accepted_Again_After_Pausing`; client key handling |
 
 | F13 | The window can zoom out until the whole 2^64 x 2^64 universe is visible | `ZoomTests`; `Zooming_Out_Brings_The_Whole_Universe_Into_One_Window` |
+| F14 | A client can discover which patterns the server holds, not just load names it already knows | `Listing_Reports_What_Can_Actually_Be_Loaded` |
 
 ## Non-functional
 

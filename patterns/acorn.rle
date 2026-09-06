@@ -1,0 +1,6 @@
+#N Acorn
+#C Seven cells, 5,206 generations, settling with 633 alive. Slower to start
+#C than the R-pentomino and far larger by the end.
+#CXRLE Pos=9223372036854775805,9223372036854775807
+x = 7, y = 3, rule = B3/S23
+bo5b$3bo3b$2o2b3o!

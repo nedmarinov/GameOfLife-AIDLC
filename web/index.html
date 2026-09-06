@@ -30,7 +30,11 @@
     background: var(--panel); color: var(--ink); border: 1px solid var(--line);
     border-radius: 4px; padding: 5px 11px; font: inherit; cursor: pointer;
   }
-  button:hover { border-color: var(--accent); }
+  button:hover, select:hover { border-color: var(--accent); }
+  select {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 4px; padding: 5px 9px; font: inherit; cursor: pointer; max-width: 22rem;
+  }
   button:active { transform: translateY(1px); }
   .stats { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; color: var(--dim); }
   .stats b { color: var(--ink); font-weight: 600; }
@@ -55,8 +59,7 @@
   <button id="zoomin">zoom in +</button>
   <button id="whole">whole universe</button>
   <button id="centre">centre 1:1</button>
-  <button id="gun">load gun</button>
-  <button id="glider">load seam glider</button>
+  <select id="catalogue" title="patterns on the server"><option value="">load pattern…</option></select>
 </div>
 
 <div class="bar stats">
@@ -117,6 +120,7 @@
       send({ op: "subscribe", originX: state.origin[0].toString(),
              originY: state.origin[1].toString(), width: SIZE, height: SIZE,
              zoom: state.zoom });
+      send({ op: "list" });
     };
 
     socket.onmessage = e => onFrame(new Uint8Array(e.data));
@@ -163,6 +167,19 @@
       el("tick").textContent = message.tickMilliseconds + "ms";
       el("run").textContent = message.running ? "pause" : "start";
       if (message.op === "hello") el("notice").textContent = "";
+    } else if (message.op === "catalogue") {
+      const menu = el("catalogue");
+      menu.innerHTML = '<option value="">load pattern…</option>';
+
+      for (const p of message.patterns) {
+        const option = document.createElement("option");
+        option.value = p.file;
+        option.textContent = p.error
+          ? `${p.file} — unreadable`
+          : `${p.name ?? p.file} — ${p.population} cells`;
+        option.disabled = Boolean(p.error);
+        menu.appendChild(option);
+      }
     } else if (message.op === "error") {
       el("notice").textContent = message.message;
       setTimeout(() => (el("notice").textContent = ""), 2500);
@@ -253,8 +270,11 @@
   el("clear").onclick = () => control("clear");
   el("faster").onclick = () => control("speed", Math.max(10, Math.floor(state.tick / 2)));
   el("slower").onclick = () => control("speed", Math.min(5000, state.tick * 2));
-  el("gun").onclick = () => send({ op: "load", file: "gosper-glider-gun.rle" });
-  el("glider").onclick = () => send({ op: "load", file: "glider.rle" });
+  el("catalogue").onchange = e => {
+    if (!e.target.value) return;
+    send({ op: "load", file: e.target.value });
+    e.target.selectedIndex = 0;
+  };
 
   const zoom = delta => send({ op: "zoom", delta });
 

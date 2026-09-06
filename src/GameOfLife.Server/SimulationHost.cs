@@ -184,6 +184,21 @@ internal sealed class SimulationHost
                 ApplyControl(client, action, value);
                 break;
 
+            case ListPatterns(var client):
+                _ = client.SendAsync(new CatalogueMessage
+                {
+                    Patterns = [.. _patterns.List().Select(entry => new PatternEntry
+                    {
+                        File = entry.File,
+                        Name = entry.Pattern?.Name,
+                        Population = entry.Pattern?.Population,
+                        Width = entry.Pattern?.Width,
+                        Height = entry.Pattern?.Height,
+                        Error = entry.Error,
+                    })],
+                });
+                break;
+
             case LoadPattern(var client, string file):
                 ApplyLoad(client, file);
                 break;

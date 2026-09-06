@@ -1,0 +1,5 @@
+#N Lightweight spaceship
+#C Travels two cells every four generations (c/2), leftward as written.
+#CXRLE Pos=9223372036854775806,9223372036854775806
+x = 5, y = 4, rule = B3/S23
+bo2bo$o4b$o3bo$4o!

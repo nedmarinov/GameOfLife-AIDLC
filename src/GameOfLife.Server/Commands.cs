@@ -29,6 +29,8 @@ internal sealed record ToggleCell(ClientConnection Client, Cell Cell) : Command;
 
 internal sealed record Control(ClientConnection Client, ControlAction Action, int Value) : Command;
 
+internal sealed record ListPatterns(ClientConnection Client) : Command;
+
 internal sealed record LoadPattern(ClientConnection Client, string File) : Command;
 
 internal sealed record SavePattern(ClientConnection Client, string File) : Command;

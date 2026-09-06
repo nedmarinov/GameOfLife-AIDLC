@@ -1,0 +1,6 @@
+#N Diehard
+#C Seven cells that vanish completely on generation 130, leaving nothing.
+#C No pattern of seven or fewer cells lasts longer before dying out.
+#CXRLE Pos=9223372036854775804,9223372036854775807
+x = 8, y = 3, rule = B3/S23
+6bob$2o6b$bo3b3o!

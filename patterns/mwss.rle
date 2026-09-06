@@ -1,0 +1,5 @@
+#N Middleweight spaceship
+#C The lightweight spaceship with one more cell. Same c/2 speed.
+#CXRLE Pos=9223372036854775805,9223372036854775806
+x = 6, y = 5, rule = B3/S23
+3bo2b$bo3bo$o5b$o4bo$5o!

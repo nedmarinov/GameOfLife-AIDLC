@@ -348,6 +348,83 @@ public class ServerIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Listing_Reports_What_Can_Actually_Be_Loaded()
+    {
+        await using TestClient client = await ConnectAsync();
+        await client.ReadMessageAsync<HelloMessage>();
+
+        // Save two patterns, then ask what exists.
+        await client.SendAsync(new ToggleMessage { X = 1UL << 63, Y = 1UL << 63 });
+        await client.ReadUntilCellAliveAsync(new Cell(1UL << 63, 1UL << 63));
+
+        await client.SendAsync(new SaveMessage { File = "one.rle" });
+        await client.ReadMessageAsync<StatusMessage>();
+        await client.SendAsync(new SaveMessage { File = "nested/two.rle" });
+        await client.ReadMessageAsync<StatusMessage>();
+
+        await client.SendAsync(new ListMessage());
+        CatalogueMessage catalogue = await client.ReadMessageAsync<CatalogueMessage>();
+
+        Assert.Contains(catalogue.Patterns, p => p.File == "one.rle");
+        Assert.Contains(catalogue.Patterns, p => p.File == "nested/two.rle");
+        Assert.All(catalogue.Patterns, p => Assert.Null(p.Error));
+        Assert.All(catalogue.Patterns, p => Assert.True(p.Population > 0));
+
+        // Every listed name must actually load, or the list is a lie.
+        foreach (PatternEntry entry in catalogue.Patterns)
+        {
+            await client.SendAsync(new LoadMessage { File = entry.File });
+            await client.ReadMessageAsync<StatusMessage>();
+        }
+    }
+
+    /// <summary>
+    /// An unreadable file is listed with its error, not hidden.
+    /// </summary>
+    /// <remarks>
+    /// Omitting it would leave a user looking at a directory they know contains
+    /// a file, and a client insisting it does not.
+    /// </remarks>
+    [Fact]
+    public async Task Listing_Reports_An_Unreadable_File_Rather_Than_Hiding_It()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_root, "broken.rle"), "this is not an RLE file");
+
+        await using TestClient client = await ConnectAsync();
+        await client.ReadMessageAsync<HelloMessage>();
+
+        await client.SendAsync(new ListMessage());
+        CatalogueMessage catalogue = await client.ReadMessageAsync<CatalogueMessage>();
+
+        PatternEntry broken = Assert.Single(catalogue.Patterns, p => p.File == "broken.rle");
+        Assert.NotNull(broken.Error);
+        Assert.Null(broken.Population);
+    }
+
+    [Fact]
+    public async Task Listing_Never_Escapes_The_Pattern_Directory()
+    {
+        // A file outside the root must not appear, however the listing walks.
+        string outside = Path.Combine(Path.GetDirectoryName(_root)!, $"outside-{Guid.NewGuid():N}.rle");
+        await File.WriteAllTextAsync(outside, "x = 1, y = 1, rule = B3/S23\no!");
+
+        try
+        {
+            await using TestClient client = await ConnectAsync();
+            await client.ReadMessageAsync<HelloMessage>();
+
+            await client.SendAsync(new ListMessage());
+            CatalogueMessage catalogue = await client.ReadMessageAsync<CatalogueMessage>();
+
+            Assert.DoesNotContain(catalogue.Patterns, p => p.File.Contains("outside", StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(outside);
+        }
+    }
+
+    [Fact]
     public async Task Save_Then_Load_Round_Trips_Through_The_Server()
     {
         await using TestClient client = await ConnectAsync();
