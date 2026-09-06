@@ -58,11 +58,26 @@ crosses `ulong.MaxValue` and arrives at the far side within four generations.
 dotnet test
 ```
 
-139 tests. The ones worth reading are in
+163 tests. The ones worth reading are in
 [TorusTests.cs](tests/GameOfLife.Core.Tests/TorusTests.cs) — a glider crossing
 the `ulong.MaxValue` seam in both dimensions, and one wrapping in a single
 dimension, which is where a hand-written modulo implementation typically breaks.
 Neither can pass on a dense grid or with signed coordinates.
+
+## What patterns work
+
+All of them. The engine implements the B3/S23 rule rather than a catalogue of
+shapes, so every Conway pattern behaves as it does anywhere else — and
+[PatternCatalogueTests.cs](tests/GameOfLife.Core.Tests/PatternCatalogueTests.cs)
+checks that against published figures rather than taking it on trust: still
+lifes, the pulsar at period 3, the pentadecathlon at period 15, the *WSS
+spaceships at c/2, the R-pentomino settling at generation 1,103 with exactly 116
+cells, the acorn at 5,206 with 633, and the diehard vanishing on generation 130.
+Each of those is then re-run straddling the 2^64 seam and required to produce an
+identical shape.
+
+Not supported, deliberately: rules other than Conway's. Loading a HighLife
+(`B36/S23`) file is refused rather than quietly simulated under the wrong rule.
 
 ## How it works
 

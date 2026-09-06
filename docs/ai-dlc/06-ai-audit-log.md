@@ -334,3 +334,45 @@ fits — but it is a good reminder that on a 2^64 torus the difference between t
 coordinates is not always a representable number. Recorded in
 `07-operations.md` under known limits; the client uses absolute `subscribe` for
 long jumps rather than computing a delta.
+
+
+### Bolt 6b — Pattern catalogue
+
+Prompted by the question "do we support all oscillators, spaceships and still
+lifes?" The answer is yes by construction — the engine implements B3/S23 rather
+than a catalogue of shapes — but that is exactly the kind of claim entries 2 and
+3 were also confident about, so it was tested instead of asserted.
+
+**The engine was right. The test data was wrong, for the third time.**
+
+Of eighteen catalogue entries, four failed, and every failure was a mistyped
+pattern or a wrong expectation of mine:
+
+| Claimed | Actual |
+|---------|--------|
+| Clock `2bo$2ob$b2o$bo!`, period 2 | never repeats — one row was shifted a column |
+| LWSS travels `(+2, 0)` | travels `(-2, 0)`; written in the left-moving orientation |
+| MWSS `3bob$o4bo$5bo$o4bo$b5o!` | 11 cells, correct count, wrong shape, never repeats |
+| HWSS `3b2ob$o5bo$6bo$o5bo$b6o!` | 13 cells, correct count, wrong shape, never repeats |
+
+Meanwhile every check whose expected value came from **outside** this project
+passed on the first run: the R-pentomino settling at generation 1,103 with
+exactly 116 cells, the acorn at 5,206 with 633, the diehard vanishing on
+generation 130, the pulsar at period 3, the pentadecathlon at period 15. A rule
+defect anywhere in birth, survival or neighbour counting diverges from those
+trajectories long before generation 1,103, so agreeing with all five is far
+stronger evidence than any pattern the author writes by hand.
+
+*The lesson, and it is now a pattern rather than an incident:* across entries 1,
+5 and this one, **every wrong oracle has been hand-authored and every externally
+sourced one has been right.** Data invented alongside the code inherits the
+author's assumptions; data taken from outside does not. Where a published figure
+exists, use it — it is the difference between a test that confirms what was
+believed and a test that could have proved it wrong.
+
+*Method:* rather than guess again at the corrections, the actual period and
+displacement of each pattern were **measured** with a throwaway program and the
+test data set from the measurements. Two of the four wrong patterns had the
+right cell count, so `ExpectedPopulation` now pins population *and* displacement
+— either alone would have let a transcription slip through that still happened
+to travel.
