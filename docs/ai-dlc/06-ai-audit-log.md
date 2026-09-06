@@ -37,3 +37,38 @@ by raw TCP after re-reading the brief — the traffic is server-initiated
 broadcast, not request/response, and delegating the framing would have removed
 the part of the problem most worth owning and testing. Recorded in ADR 0002
 with WebSocket kept as a documented alternative rather than deleted.
+
+### Bolt 1 — Core engine
+
+**Entry 1 — a wrong test that looked like an engine bug.**
+
+*Asked for:* a test proving a glider crosses the `ulong.MaxValue` seam intact.
+
+*Produced:* the test ran the glider three diagonal steps from
+`(MaxValue-1, MaxValue-1)`, compared the whole live set at each step, and then
+added a final check that `(1, 1)` — the glider's wrapped placement origin — was
+alive.
+
+*What was wrong:* the glider's five offsets are `(1,0) (2,1) (0,2) (1,2) (2,2)`.
+There is no cell at offset `(0,0)`, so the placement origin is never itself
+alive. The engine was correct; the assertion was not. The observed live set,
+`(2,1) (2,3) (3,3) (3,2) (1,3)`, is exactly the glider at origin `(1,1)` — the
+set-equality assertions had already passed, which is what made the diagnosis
+quick.
+
+*Why it matters:* this is the dangerous class of AI defect. A wrong assertion in
+a test named "proves the torus works" fails in a way that looks like an engine
+bug, and the obvious response — adjusting the wrap arithmetic until the test
+goes green — would have introduced a real defect into working code to satisfy a
+broken oracle. The guard is that the test asserted the *whole* live set
+independently, so the two assertions disagreed with each other rather than both
+pointing at the engine.
+
+*Shipped instead:* the final check now asserts every live cell has coordinates
+below 10, which states the actual claim — cells this low are only reachable
+from a start at `MaxValue - 1` by wrapping — rather than a coincidental
+consequence of it.
+
+*Guard added:* none needed; A2 already covered the engine behaviour. The lesson
+is recorded rather than automated: when an AI-written test fails, establish
+whether the oracle or the subject is wrong before changing either.
