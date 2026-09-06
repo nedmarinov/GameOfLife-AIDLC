@@ -1,0 +1,55 @@
+## .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]64/
+artifacts/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Test / coverage
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.trx
+
+## Rider / VS / VS Code
+.vs/
+.idea/
+*.DotSettings.user
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+project.lock.json
+project.fragment.lock.json
+
+## macOS / Linux / Windows noise
+.DS_Store
+.AppleDouble
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+*~
+
+## Runtime output of this project
+snapshots/
+*.log
+
+## Private working notes - never committed
+*.private.md
+NOTES.private*
