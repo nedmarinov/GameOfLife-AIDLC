@@ -31,7 +31,7 @@ An untestable requirement is a requirement nobody can prove was met.
 | N2 | A client joining mid-run becomes consistent without replay logic | `A_Client_Joining_Mid_Run_Sees_Current_State_Without_Replay` |
 | N3 | Coordinates survive the wire without precision loss | `MessageTests.Coordinates_Above_Two_To_The_Fifty_Three_Survive_A_Round_Trip` |
 | N4 | Message framing survives arbitrary TCP segmentation | `FramingTests.Reader_Survives_A_Stream_Delivered_One_Byte_At_A_Time` |
-| N5 | Runs on macOS, Linux and Windows with no code change | verified on macOS; Linux and Windows pending, Bolt 6 |
+| N5 | Runs on macOS, Linux and Windows with no code change | macOS locally; Linux and Windows by CI (`.github/workflows/ci.yml`), build + tests + a headless server/client smoke run. Visual confirmation on an interactive Windows console still outstanding |
 | N6 | Runs from a clean clone with `dotnet run`, no external services | Bolt 6 |
 | N7 | The domain core has zero third-party dependencies | `GameOfLife.Core.csproj` has no `PackageReference` |
 

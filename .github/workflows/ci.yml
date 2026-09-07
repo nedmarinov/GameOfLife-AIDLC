@@ -1,0 +1,65 @@
+name: build
+
+# Requirement N5 asks that this run unchanged on macOS, Linux and Windows.
+# Only macOS is available to develop on, so the other two are verified here
+# rather than claimed. Bolt 06 found a real Windows defect by inspection alone
+# (ANSI escapes are inert unless virtual terminal processing is enabled), which
+# is why "no platform-specific code, so it should be fine" is not good enough.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Run every platform even after one fails: which platforms fail is the
+      # information being gathered.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build
+        run: dotnet build --configuration Release --nologo
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --nologo --verbosity normal
+
+  smoke:
+    name: run on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: test
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build
+        run: dotnet build --nologo
+
+      # bash is present on all three runners, so one script covers them all
+      # rather than a PowerShell fork that would then be tested only on Windows.
+      - name: Start a server, attach a client, check frames arrive
+        shell: bash
+        run: ./scripts/smoke-test.sh

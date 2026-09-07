@@ -79,6 +79,10 @@ crosses `ulong.MaxValue` and arrives at the far side within four generations.
 dotnet test
 ```
 
+192 tests. `scripts/smoke-test.sh` additionally starts a server, attaches a
+client, and checks that frames actually arrive — it runs headlessly, so CI
+executes it on Linux, Windows and macOS on every push.
+
 192 tests. The ones worth reading are in
 [TorusTests.cs](tests/GameOfLife.Core.Tests/TorusTests.cs) — a glider crossing
 the `ulong.MaxValue` seam in both dimensions, and one wrapping in a single

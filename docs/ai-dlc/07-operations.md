@@ -18,14 +18,22 @@ The server is one process holding one universe in memory.
 
 ## Verified platforms
 
-| Platform | Status |
-|----------|--------|
-| macOS (arm64, .NET 9.0.101) | Verified — full suite green, two-client run confirmed |
-| Linux | Not yet run. No platform-specific code paths; expected to work |
-| Windows | Not yet run. See the terminal note below |
+| Platform | Build & tests | Server + client run | Seen by a human |
+|----------|---------------|---------------------|-----------------|
+| macOS (arm64, .NET 9.0.101) | verified locally | verified locally | **yes** |
+| Linux | CI | CI smoke job | no |
+| Windows | CI | CI smoke job | **no** |
 
-**This is stated rather than claimed.** N5 asks that it run unchanged on all
-three, and only one has actually been exercised.
+**Read that last column before trusting the badge.** CI proves the code builds,
+the tests pass, a client connects and decodes frames, and the half-block glyph
+survives the platform's console encoding. It cannot prove that a terminal
+*displays* the escape sequences correctly, because CI captures stdout to a file
+rather than interpreting it, and nobody looks at the result.
+
+So the `SetConsoleMode` call that enables ANSI handling on Windows — the
+mitigation for a defect found by inspection in Bolt 06 — is still unverified
+against an interactive Windows console. If you have one, running the client on
+it for thirty seconds closes the last gap in N5.
 
 Two places where the platforms genuinely differ, both handled:
 

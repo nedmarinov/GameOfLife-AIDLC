@@ -5,7 +5,15 @@
 > per-bolt record is for.
 
 **Unit(s):** U9 (the outstanding half)
-**Status:** not started — requires machines not available to the agent
+**Status:** in progress — CI added, awaiting its first run
+
+> **Plan revised mid-bolt.** The original plan put CI out of scope, on the
+> grounds that a one-off manual run answers the question and wiring up runners
+> does not. That reasoning assumed a Windows machine was reachable. It is not —
+> the author has no Windows hardware — so CI stops being scope creep and becomes
+> the only route to evidence. The revision is recorded rather than silently
+> applied, because a plan quietly edited to match what became convenient is
+> worth nothing.
 
 ## Goal
 
@@ -28,9 +36,9 @@ Bolt 06 already found a Windows defect by inspection that no test could catch.
 
 ## Out of scope
 
-- CI. A one-off manual verification answers the question; wiring up runners
-  does not, and would be scope the brief never asked for.
 - Any platform beyond the three named in N5.
+- Visual confirmation on Windows. See the limits section below — this is the
+  part CI provably cannot close.
 
 ## Risks going in
 
@@ -44,14 +52,40 @@ Bolt 06 already found a Windows defect by inspection that no test could catch.
 - **Linux terminals with no 256-colour support.** Colour escapes would be
   ignored or printed. Not seen on any modern terminal, but unverified.
 
+## What CI can and cannot prove
+
+Being precise about this matters, because a green badge invites the reader to
+assume more than it earns.
+
+**It can prove**, on all three platforms:
+
+- the solution builds in Release with no platform-specific compilation problem;
+- all tests pass — sockets, threading, framing, file paths, torus arithmetic;
+- the server binds, seeds from `patterns/`, and ticks;
+- a client connects, decodes frames, and advances the generation counter;
+- **the half-block glyph survives the platform's console encoding** — if
+  Windows mangled UTF-8 output the smoke test's `grep` for `▀` would fail;
+- the browser bridge serves its page and completes an RFC 6455 handshake,
+  checked against the specification's published accept value.
+
+**It cannot prove** that a real terminal *displays* the escapes correctly. CI
+captures stdout to a file, so the ANSI sequences are recorded rather than
+interpreted, and no human sees the result. The `SetConsoleMode` call in
+`Screen.Enter` — the mitigation for the Bolt 06 defect — therefore remains
+**untested against an interactive Windows console**. A pipe cannot tell you
+whether a grid looked like a grid.
+
+That residual gap needs one person, one Windows Terminal, thirty seconds.
+
 ## Done when
 
-- `dotnet test` is green on all three platforms, from a clean clone, with no
-  code changes.
-- A screenshot or a written confirmation exists for the terminal client on
-  Linux and on Windows.
+- The `build` workflow is green on ubuntu, windows and macos runners.
+- The smoke job passes on all three, so a server and client demonstrably run.
 - `docs/ai-dlc/07-operations.md` and requirement N5 are updated to say
-  *verified* — or to record precisely what failed and on what.
+  *verified by CI*, with the visual gap named — not upgraded to a bare
+  *verified* that the evidence does not support.
+- The visual check on an interactive Windows console remains open until
+  somebody with the hardware does it.
 
 ## Note on how this ends
 
