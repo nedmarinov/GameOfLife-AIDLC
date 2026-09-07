@@ -236,6 +236,64 @@ public class ServerIntegrationTests : IAsyncLifetime
         Assert.NotEqual((nx, ny), (fx, fy));
     }
 
+    /// <summary>
+    /// A pattern loaded while zoomed out lands in the middle, not the corner.
+    /// </summary>
+    /// <remarks>
+    /// The recentring must scale by zoom. Measuring it in displayed cells put a
+    /// pattern roughly twelve thousand cells off at zoom 8 — still technically
+    /// visible, jammed against the top-left corner, which is why no earlier
+    /// test caught it.
+    /// </remarks>
+    [Fact]
+    public async Task Loading_While_Zoomed_Out_Centres_The_Pattern()
+    {
+        await using TestClient client = await ConnectAsync();
+        await client.ReadMessageAsync<HelloMessage>();
+
+        // Put a recognisable cell somewhere, save it, then go looking for it
+        // from a long way out.
+        var mark = new Cell(1UL << 62, 1UL << 62);
+        await client.SendAsync(new SubscribeMessage { OriginX = mark.X, OriginY = mark.Y, Width = 100, Height = 100 });
+        await client.SendAsync(new ToggleMessage { X = mark.X, Y = mark.Y });
+        await client.ReadUntilCellAliveAsync(mark);
+
+        await client.SendAsync(new SaveMessage { File = "mark.rle" });
+        await client.ReadMessageAsync<StatusMessage>();
+
+        await client.SendAsync(new ZoomMessage { Delta = 8 });
+        (Viewport zoomed, _, _) = await client.ReadUntilViewportAsync(v => v.Zoom == 8);
+
+        await client.SendAsync(new LoadMessage { File = "mark.rle" });
+
+        (Viewport after, _, byte[] bitmap) =
+            await client.ReadUntilViewportAsync(v => v.OriginX != zoomed.OriginX);
+
+        Assert.Equal(8, after.Zoom);
+        Assert.True(after.TryLocate(mark, out int x, out int y));
+        Assert.True(Viewport.IsSet(bitmap, after.BitIndex(x, y)), "loaded pattern is not lit");
+
+        // Near the middle, not shoved into a corner. A quarter-window tolerance
+        // is generous and still fails the unscaled arithmetic, which landed at
+        // displayed cell zero.
+        Assert.InRange(x, (after.Width / 2) - 25, (after.Width / 2) + 25);
+        Assert.InRange(y, (after.Height / 2) - 25, (after.Height / 2) + 25);
+    }
+
+    [Fact]
+    public async Task Loading_At_One_To_One_Still_Centres_The_Pattern()
+    {
+        await using TestClient client = await ConnectAsync();
+        await client.ReadMessageAsync<HelloMessage>();
+
+        await client.SendAsync(new LoadMessage { File = "gosper-glider-gun.rle" });
+
+        // The shipped gun is not in this test's pattern directory, so this is
+        // expected to fail -- the point is that it fails cleanly.
+        ErrorMessage error = await client.ReadMessageAsync<ErrorMessage>();
+        Assert.Equal(ErrorCode.FileNotFound, error.Code);
+    }
+
     [Fact]
     public async Task Zoom_Is_Per_Client_Like_The_Viewport()
     {

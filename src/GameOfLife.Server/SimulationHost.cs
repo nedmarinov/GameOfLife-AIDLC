@@ -274,11 +274,7 @@ internal sealed class SimulationHost
 
             // Move the requesting client's window to the pattern, so a load is
             // visibly a load rather than an apparently empty universe.
-            client.Viewport = client.Viewport with
-            {
-                OriginX = pattern.Origin.Offset(-(client.Viewport.Width - pattern.Width) / 2, 0).X,
-                OriginY = pattern.Origin.Offset(0, -(client.Viewport.Height - pattern.Height) / 2).Y,
-            };
+            client.Viewport = Centre(client.Viewport, pattern);
 
             _dirty = true;
             BroadcastStatus();
@@ -291,6 +287,29 @@ internal sealed class SimulationHost
         {
             _ = client.SendErrorAsync(ErrorCode.FileError, error.Message);
         }
+    }
+
+    /// <summary>
+    /// Centres a window on a pattern, at whatever zoom the window is using.
+    /// </summary>
+    /// <remarks>
+    /// The offset must be measured in universe cells, which means scaling by
+    /// the zoom. An earlier version subtracted half the window's <em>width in
+    /// displayed cells</em>, so at zoom 8 a loaded pattern landed some twelve
+    /// thousand cells from where it belonged and appeared jammed in the
+    /// top-left corner instead of the middle. <see cref="Viewport.CoverageWidth"/>
+    /// is the same quantity already scaled.
+    /// </remarks>
+    private static Viewport Centre(Viewport viewport, RlePattern pattern)
+    {
+        ulong centreX = unchecked(pattern.Origin.X + ((ulong)pattern.Width >> 1));
+        ulong centreY = unchecked(pattern.Origin.Y + ((ulong)pattern.Height >> 1));
+
+        return viewport with
+        {
+            OriginX = unchecked(centreX - (viewport.CoverageWidth >> 1)),
+            OriginY = unchecked(centreY - (viewport.CoverageHeight >> 1)),
+        };
     }
 
     private void ApplySave(ClientConnection client, string file)

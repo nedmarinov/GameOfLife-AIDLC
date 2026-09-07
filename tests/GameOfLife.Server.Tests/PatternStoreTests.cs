@@ -76,6 +76,71 @@ public class PatternStoreTests : IDisposable
         Assert.Throws<ArgumentException>(() => _store.Resolve("   "));
     }
 
+    /// <summary>
+    /// A symlink inside the root pointing outside it must be refused.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Path.GetFullPath(string)"/> is purely textual and does not
+    /// follow links, so a path through a symlink passes a naive containment
+    /// check while touching a file outside the root. This is the regression
+    /// test for that: an earlier version of the store claimed to reject symlink
+    /// escapes and did not.
+    /// </remarks>
+    [Fact]
+    public void Rejects_A_Symlink_That_Points_Outside_The_Root()
+    {
+        string outside = Path.Combine(Path.GetTempPath(), $"gol-outside-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "secret.rle"), "x = 1, y = 1, rule = B3/S23\no!");
+
+        try
+        {
+            Directory.CreateSymbolicLink(Path.Combine(_root, "escape"), outside);
+        }
+        catch (Exception error) when (error is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+        {
+            // Unprivileged Windows cannot create links. Nothing to assert here.
+            Directory.Delete(outside, recursive: true);
+            return;
+        }
+
+        try
+        {
+            Assert.Throws<UnauthorizedAccessException>(() => _store.Resolve("escape/secret.rle"));
+            Assert.Throws<UnauthorizedAccessException>(() => _store.Load("escape/secret.rle"));
+
+            // The write side is the damaging half.
+            var universe = new Universe();
+            universe.Reset([new Cell(1, 1)]);
+            Assert.Throws<UnauthorizedAccessException>(() => _store.Save(universe, "escape/planted.rle"));
+            Assert.False(File.Exists(Path.Combine(outside, "planted.rle")));
+        }
+        finally
+        {
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_Symlink_Staying_Inside_The_Root_Is_Still_Allowed()
+    {
+        // Containment is the rule, not a ban on links.
+        string inner = Path.Combine(_root, "real");
+        Directory.CreateDirectory(inner);
+        File.WriteAllText(Path.Combine(inner, "p.rle"), "x = 1, y = 1, rule = B3/S23\no!");
+
+        try
+        {
+            Directory.CreateSymbolicLink(Path.Combine(_root, "alias"), inner);
+        }
+        catch (Exception error) when (error is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+        {
+            return;
+        }
+
+        Assert.Equal(1, _store.Load("alias/p.rle").Population);
+    }
+
     [Fact]
     public void Load_Reports_A_Missing_File_As_Missing_Not_As_Forbidden()
     {

@@ -487,3 +487,57 @@ answered from memory rather than from the source. **The standing rule — where 
 published source exists, check it — applies to vocabulary, not only to formats
 and figures.** A term introduced without a citation is an unchecked claim that
 then spreads through every artifact that uses it.
+
+
+### Pre-publication review
+
+**Entry 8 — a security claim in a comment that was not true.**
+
+*Found by:* a deliberate review pass before making the repository public, asked
+for explicitly rather than prompted by any failure.
+
+*What was wrong:* `PatternStore` documented its containment check as rejecting
+"traversal, absolute paths, and symlink escapes together". The first two held.
+The third did not: `Path.GetFullPath` normalises text and does not follow
+symbolic links, so a link inside `patterns/` pointing elsewhere yielded a path
+that passed containment while touching a file outside the root. Confirmed by
+building the case and reading the escaped file before changing anything.
+
+*Why it matters more than the gap itself:* the gap needs local filesystem access
+and is not reachable through the protocol. The **claim** was the defect. A
+comment asserting a security property that does not hold is worse than no
+comment, because it stops the next reader from checking. This log had repeated
+the claim too, which is exactly how an unchecked assertion propagates — the same
+mechanism that let the word "bolt" go undefined through ten commits.
+
+*Shipped:* containment is now checked textually and then physically, resolving
+every path component through its links. Two regression tests: an escaping link
+is refused on read and on write, and a link that stays inside the root still
+works, because containment is the rule rather than a ban on links.
+
+*A second defect found while fixing the first:* the initial link resolution
+followed one link but did not re-resolve the target, which may cross links of
+its own. On macOS that is the normal case, not an exotic one — `/var` is a link
+to `/private/var`, so nearly every temporary path involves one. The test for a
+*legitimate* inside-the-root link caught it; the test for the escape passed
+throughout. Writing the permissive case as well as the forbidden one is what
+made the difference.
+
+**Entry 9 — arithmetic that ignored a feature added later.**
+
+Loading a pattern recentred the window by subtracting half its width in
+*displayed* cells. That was correct when the only zoom was 1:1 and silently
+wrong afterwards: at zoom 8 a loaded pattern landed about twelve thousand cells
+from where it belonged, in the top-left corner. `Pan` had been updated to scale
+by zoom; this had not.
+
+The failure mode is worth noting — the pattern was still **visible**, just in
+the wrong place. A test asserting "the loaded pattern appears" would have passed.
+The new test asserts it appears *near the middle*, which is the actual claim.
+
+**On the seven issues left unfixed.** They are recorded in
+`docs/known-issues.md` with the trigger each needs and the reason for not
+fixing it. Shipping them silently would have been the easier choice and a worse
+one: a reviewer who finds an issue that is already written down learns something
+about the author's judgement, while one who finds an issue nobody noticed learns
+something else.

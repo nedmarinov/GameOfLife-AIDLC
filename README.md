@@ -79,11 +79,11 @@ crosses `ulong.MaxValue` and arrives at the far side within four generations.
 dotnet test
 ```
 
-192 tests. `scripts/smoke-test.sh` additionally starts a server, attaches a
+196 tests. `scripts/smoke-test.sh` additionally starts a server, attaches a
 client, and checks that frames actually arrive — it runs headlessly, so CI
 executes it on Linux, Windows and macOS on every push.
 
-192 tests. The ones worth reading are in
+196 tests. The ones worth reading are in
 [TorusTests.cs](tests/GameOfLife.Core.Tests/TorusTests.cs) — a glider crossing
 the `ulong.MaxValue` seam in both dimensions, and one wrapping in a single
 dimension, which is where a hand-written modulo implementation typically breaks.
@@ -224,6 +224,14 @@ their rejected alternatives, a
 **wrong and was rejected** — a file format tag that meant something else, a
 socket closed out from under its own writer, and two test oracles that were
 wrong about wrapped coordinates while the code was right.
+
+## Known issues
+
+A review pass before publication found nine issues; two were fixed and seven
+were triaged out. [docs/known-issues.md](docs/known-issues.md) lists all nine
+with the trigger each needs and the reasoning. None of the seven is reachable
+from the demo path or remotely exploitable — and none of the nine was found by
+the test suite, which is worth knowing about the tests.
 
 ## Scope
 
